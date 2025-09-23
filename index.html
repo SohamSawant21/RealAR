@@ -136,8 +136,8 @@
             font-size: 16px;
             text-shadow: 0 0 3px black;
             pointer-events: none;
-            -webkit-user-select: none;
-            user-select: none;
+                -webkit-user-select: none;
+                user-select: none;
             transition: opacity 0.3s;
         }
     </style>
@@ -320,8 +320,15 @@
                 labels.push({ cube: cube, element: labelDiv });
             });
             
-            // In non-AR mode, show immediately. In AR, wait for placement.
-            cubesGroup.visible = !renderer.xr.isPresenting;
+            if (renderer.xr.isPresenting) {
+                // Auto-place cubes 1 meter in front of camera
+                const camDir = new THREE.Vector3();
+                camera.getWorldDirection(camDir);
+                cubesGroup.position.copy(camera.position).add(camDir.multiplyScalar(1));
+                cubesGroup.visible = true;
+            } else {
+                cubesGroup.visible = true;
+            }
             scene.add(cubesGroup);
             updateStatsPanel();
         }
@@ -491,7 +498,7 @@
         }
 
         function updateUI(isReady) {
-            const sortInteractable = isReady && (!renderer.xr.isPresenting || cubesPlaced);
+            const sortInteractable = isReady;
             document.getElementById('sort-btn').disabled = !sortInteractable;
             document.getElementById('next-step-btn').disabled = !sortInteractable;
             document.getElementById('array-input').disabled = !isReady && isSorting;
