@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Cube with AR</title>
+    
+    <!-- 
+      This is a basic stylesheet.
+      It makes sure the 3D viewer takes up the full browser window.
+    -->
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        
+        p {
+            color: #555;
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+
+        model-viewer {
+            width: 80%;
+            height: 60%;
+            max-width: 800px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+    </style>
+
+    <!-- 
+      This script loads the <model-viewer> web component from Google's CDN.
+      It's what makes the <model-viewer> tag work.
+      The 'module' type is important for it to load correctly.
+    -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+</head>
+<body>
+
+    <h1>Interactive 3D Cube</h1>
+    <p>Click and drag to rotate, use your mouse wheel or pinch to zoom. On a mobile device, tap the AR icon in the bottom right to place the cube in your world!</p>
+    
+    <!-- 
+      This is the <model-viewer> element.
+      It's a custom HTML tag that handles all the 3D rendering and interaction.
+      Let's break down the attributes:
+      
+      src="...":         This points to the 3D model file. We are using a simple cube .gltf file hosted on a CDN.
+                         To use your own model, just replace this URL.
+                         
+      alt="...":         A description for screen readers, for accessibility.
+      
+      auto-rotate:       Makes the cube slowly rotate on its own.
+      
+      camera-controls:   This is the magic attribute that enables rotation (drag),
+                         zooming (scroll/pinch), and panning (right-click-drag).
+                         
+      ar:                Enables the Augmented Reality feature, which shows the "View in AR" button
+                         on supported devices (mostly modern mobile phones).
+                         
+      ar-modes="...":    Specifies the types of AR experiences to offer. 'webxr' is for browsers that
+                         support the WebXR API (like Chrome on Android). 'scene-viewer' and 'quick-look'
+                         are for native AR viewers on Android and iOS respectively.
+                         
+      shadow-intensity:  Controls how dark the shadow under the model is.
+      
+      environment-image: Sets a neutral lighting environment for realistic reflections. 'neutral' is a built-in option.
+    -->
+    <model-viewer 
+        src="https://modelviewer.dev/shared-assets/models/cube.gltf"
+        alt="A 3D model of a cube"
+        auto-rotate
+        camera-controls
+        ar
+        ar-modes="webxr scene-viewer quick-look"
+        shadow-intensity="1"
+        environment-image="neutral">
+    </model-viewer>
+
+</body>
+</html>

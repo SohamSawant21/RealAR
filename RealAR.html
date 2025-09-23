@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Bubble Sort with AR</title>
+    
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: #fff;
+            background-color: #1a1a1a;
+            overflow: hidden; /* Hide scrollbars */
+        }
+        
+        /* Main container for UI elements */
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px;
+            box-sizing: border-box;
+            z-index: 100;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7), rgba(0,0,0,0));
+            pointer-events: none; /* Allow clicks to pass through to the canvas */
+        }
+
+        #ui-container > * {
+            pointer-events: auto; /* Re-enable pointer events for UI children */
+        }
+        
+        .control-panel {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .control-panel h1 {
+            margin: 0 0 10px 0;
+            font-weight: 400;
+            font-size: 1.8em;
+            color: #fff;
+            text-shadow: 0 0 5px #000;
+        }
+
+        .input-group {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .input-group label {
+            font-size: 1em;
+        }
+
+        .input-group input[type="text"] {
+            background-color: #333;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px;
+            border-radius: 6px;
+            width: 200px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        
+        .input-group input[type="text"].invalid {
+            border-color: #e74c3c;
+        }
+
+        .input-group input[type="range"] {
+            width: 150px;
+        }
+        
+        .button-group button {
+            background-color: #444;
+            color: #fff;
+            border: 1px solid #666;
+            padding: 10px 20px;
+            font-size: 1em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            margin: 5px;
+        }
+
+        .button-group button:hover:not(:disabled) {
+            background-color: #555;
+        }
+
+        .button-group button:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        .button-group button:disabled {
+            background-color: #2b2b2b;
+            color: #777;
+            cursor: not-allowed;
+        }
+        
+        #stats-panel {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        #stats-panel p {
+            margin: 4px 0;
+        }
+
+        #ar-button {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 101;
+        }
+
+        .label {
+            position: absolute;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 5px 10px;
+            border-radius: 5px;
+            transform: translate(-50%, -50%); /* Center the label */
+            font-size: 16px;
+            text-shadow: 0 0 3px black;
+            pointer-events: none;
+            -webkit-user-select: none;
+            user-select: none;
+            transition: opacity 0.3s;
+        }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="ui-container">
+        <div class="control-panel">
+            <h1>Interactive 3D Bubble Sort</h1>
+            <div class="input-group">
+                <label for="array-input">Array:</label>
+                <input type="text" id="array-input" value="8, 3, 2, 7">
+                <label for="speed-slider">Speed:</label>
+                <input type="range" id="speed-slider" min="50" max="1000" value="500" step="10">
+            </div>
+            <div class="button-group">
+                <button id="sort-btn">Start Sort</button>
+                <button id="next-step-btn">Next Step</button>
+                <button id="reset-btn">Reset</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="stats-panel">
+        <p>Comparisons: <span id="comparisons-stat">0</span></p>
+        <p>Swaps: <span id="swaps-stat">0</span></p>
+        <p>Array: <span id="array-stat"></span></p>
+    </div>
+
+    <!-- Container for 2D labels that overlay the 3D scene -->
+    <div id="label-container"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+        // --- CONFIGURATION ---
+        const CUBE_COLOR = 0x007bff;
+        const HIGHLIGHT_COLOR = 0xffc107;
+        const SORTED_COLOR = 0x28a745;
+        let animationSpeedMs = 500;
+
+        // --- GLOBAL STATE ---
+        let scene, camera, renderer, controls;
+        let cubesGroup, labels = [];
+        let isSorting = false, isAutoSorting = false, isAnimating = false;
+        let sortGenerator = null;
+        let stats = { comparisons: 0, swaps: 0 };
+        
+        // --- AR-SPECIFIC STATE ---
+        let reticle, hitTestSource = null, cubesPlaced = false;
+        let shadowPlane;
+
+        // --- INITIALIZATION ---
+        init();
+
+        function init() {
+            // Scene & Camera
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 12);
+            camera.lookAt(0, 0, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.xr.enabled = true;
+            // Enable shadows
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            // Lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight.position.set(5, 10, 7.5);
+            // Enable light to cast shadows
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.target.set(0, 2, 0);
+
+            // UI & Event Listeners
+            setupUI();
+            setupAR();
+
+            // Initial scene setup
+            reset();
+            
+            // Render loop
+            renderer.setAnimationLoop(animate);
+        }
+
+        function setupUI() {
+            document.getElementById('sort-btn').addEventListener('click', toggleAutoSort);
+            document.getElementById('reset-btn').addEventListener('click', reset);
+            document.getElementById('next-step-btn').addEventListener('click', nextStep);
+            document.getElementById('speed-slider').addEventListener('input', (e) => {
+                animationSpeedMs = 1050 - e.target.value;
+            });
+            document.getElementById('array-input').addEventListener('change', reset);
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function setupAR() {
+            // Create AR button and configure session
+            const arButton = ARButton.createButton(renderer, { 
+                requiredFeatures: ['hit-test'] 
+            });
+            arButton.id = 'ar-button';
+            document.body.appendChild(arButton);
+            
+            // Reticle for surface detection
+            reticle = new THREE.Mesh(
+                new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
+                new THREE.MeshBasicMaterial()
+            );
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+
+            // Shadow plane for realism
+            shadowPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(10, 10),
+                new THREE.ShadowMaterial({ opacity: 0.5 })
+            );
+            shadowPlane.rotation.x = -Math.PI / 2;
+            shadowPlane.receiveShadow = true;
+            shadowPlane.visible = false;
+            scene.add(shadowPlane);
+
+            // Controller for tap-to-place gesture
+            const controller = renderer.xr.getController(0);
+            controller.addEventListener('select', onSelect);
+            scene.add(controller);
+        }
+        
+        // --- OBJECT & LABEL CREATION ---
+        function createCubes(dataArray) {
+            // Clean up old objects
+            if (cubesGroup) scene.remove(cubesGroup);
+            labels.forEach(label => label.element.remove());
+            labels = [];
+
+            cubesGroup = new THREE.Group();
+            const cubeWidth = 0.2; // Scaled down for AR
+            const spacing = 0.3;
+            const totalWidth = (dataArray.length - 1) * spacing;
+            const labelContainer = document.getElementById('label-container');
+
+            dataArray.forEach((value, index) => {
+                const scaledValue = value * 0.2; // Scale height
+                const geometry = new THREE.BoxGeometry(cubeWidth, scaledValue, cubeWidth);
+                const material = new THREE.MeshStandardMaterial({ color: CUBE_COLOR });
+                const cube = new THREE.Mesh(geometry, material);
+                cube.castShadow = true; // Cubes cast shadows
+                
+                const xPos = index * spacing - totalWidth / 2;
+                cube.position.set(xPos, scaledValue / 2, 0);
+                cube.userData = { value: value };
+                cubesGroup.add(cube);
+
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'label';
+                labelDiv.textContent = value;
+                labelContainer.appendChild(labelDiv);
+                labels.push({ cube: cube, element: labelDiv });
+            });
+            
+            // In non-AR mode, show immediately. In AR, wait for placement.
+            cubesGroup.visible = !renderer.xr.isPresenting;
+            scene.add(cubesGroup);
+            updateStatsPanel();
+        }
+
+        // --- SORTING LOGIC (Unchanged) ---
+        function* bubbleSortGenerator() {
+            const cubes = cubesGroup.children.slice();
+            let n = cubes.length;
+
+            for (let i = 0; i < n - 1; i++) {
+                for (let j = 0; j < n - i - 1; j++) {
+                    const cube1 = cubes[j];
+                    const cube2 = cubes[j + 1];
+
+                    cube1.material.color.set(HIGHLIGHT_COLOR);
+                    cube2.material.color.set(HIGHLIGHT_COLOR);
+                    stats.comparisons++;
+                    updateStatsPanel();
+                    yield;
+
+                    if (cube1.userData.value > cube2.userData.value) {
+                        isAnimating = true;
+                        stats.swaps++;
+                        swapCubes(cube1, cube2).then(() => isAnimating = false);
+                        [cubes[j], cubes[j + 1]] = [cubes[j + 1], cubes[j]];
+                        yield;
+                    }
+                    
+                    if (!cube1.userData.sorted) cube1.material.color.set(CUBE_COLOR);
+                    if (!cube2.userData.sorted) cube2.material.color.set(CUBE_COLOR);
+                }
+                const sortedCube = cubes[n - 1 - i];
+                sortedCube.material.color.set(SORTED_COLOR);
+                sortedCube.userData.sorted = true;
+            }
+            if (n > 0) {
+                cubes[0].material.color.set(SORTED_COLOR);
+                cubes[0].userData.sorted = true;
+            }
+            updateUI(false);
+        }
+
+        // --- ANIMATION & HELPERS ---
+        function swapCubes(cube1, cube2) {
+            return new Promise(resolve => {
+                const pos1_x = cube1.position.x;
+                const pos2_x = cube2.position.x;
+                const duration = animationSpeedMs / 2;
+                let startTime = null;
+                function animateSwap(time) {
+                    if (!startTime) startTime = time;
+                    const progress = Math.min((time - startTime) / duration, 1);
+                    cube1.position.x = pos1_x + (pos2_x - pos1_x) * progress;
+                    cube2.position.x = pos2_x + (pos1_x - pos2_x) * progress;
+                    if (progress < 1) requestAnimationFrame(animateSwap);
+                    else {
+                        cube1.position.x = pos2_x;
+                        cube2.position.x = pos1_x;
+                        updateStatsPanel();
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(animateSwap);
+            });
+        }
+        
+        function animatePlacement(targetScale) {
+            const duration = 300; // ms
+            let startTime = null;
+            const startScale = cubesGroup.scale.clone();
+            function animateScale(time) {
+                if (!startTime) startTime = time;
+                const progress = Math.min((time - startTime) / duration, 1);
+                cubesGroup.scale.lerpVectors(startScale, targetScale, progress);
+                if (progress < 1) requestAnimationFrame(animateScale);
+            }
+            requestAnimationFrame(animateScale);
+        }
+
+        function updateLabels() {
+            if (!cubesGroup.visible) return;
+            labels.forEach(label => {
+                const { cube, element } = label;
+                const vector = new THREE.Vector3();
+                const cubeHeight = cube.geometry.parameters.height;
+                cube.getWorldPosition(vector);
+                vector.y += cubeHeight / 2 + 0.1; // Position above cube
+                vector.project(camera);
+
+                const x = (vector.x * .5 + .5) * renderer.domElement.clientWidth;
+                const y = (vector.y * -.5 + .5) * renderer.domElement.clientHeight;
+
+                element.style.transform = `translate(-50%, -50%) translate(${x}px,${y}px)`;
+                element.style.opacity = vector.z < 1 ? '1' : '0';
+            });
+        }
+        
+        function updateStatsPanel() {
+            document.getElementById('comparisons-stat').textContent = stats.comparisons;
+            document.getElementById('swaps-stat').textContent = stats.swaps;
+            if (!cubesGroup) return;
+            const currentArray = cubesGroup.children
+                .slice().sort((a, b) => a.position.x - b.position.x)
+                .map(c => c.userData.value).join(', ');
+            document.getElementById('array-stat').textContent = `[${currentArray}]`;
+        }
+
+        // --- EVENT HANDLERS ---
+        function onSelect() {
+            if (reticle.visible) {
+                cubesGroup.position.setFromMatrixPosition(reticle.matrix);
+                cubesGroup.quaternion.setFromRotationMatrix(reticle.matrix);
+                cubesGroup.visible = true;
+                cubesPlaced = true;
+                
+                shadowPlane.position.setFromMatrixPosition(reticle.matrix);
+                shadowPlane.visible = true;
+                
+                // Animate scale on placement
+                cubesGroup.scale.set(0, 0, 0);
+                animatePlacement(new THREE.Vector3(1, 1, 1));
+            }
+        }
+
+        function toggleAutoSort() {
+            isAutoSorting = !isAutoSorting;
+            document.getElementById('sort-btn').textContent = isAutoSorting ? 'Pause' : 'Start Sort';
+            if (isAutoSorting && !isSorting) {
+                isSorting = true;
+                sortGenerator = bubbleSortGenerator();
+                document.getElementById('next-step-btn').disabled = true;
+            }
+        }
+        
+        function nextStep() {
+            if (!isSorting) {
+                isSorting = true;
+                sortGenerator = bubbleSortGenerator();
+            }
+            if (!isAnimating && sortGenerator) {
+                if (sortGenerator.next().done) sortGenerator = null;
+            }
+        }
+        
+        function reset() {
+            const inputElement = document.getElementById('array-input');
+            const parsedData = inputElement.value.split(',').map(n => parseFloat(n.trim())).filter(n => !isNaN(n) && n > 0);
+            
+            inputElement.classList.remove('invalid');
+            if (parsedData.length === 0) {
+                inputElement.classList.add('invalid');
+                return;
+            }
+            
+            isSorting = false; isAutoSorting = false; isAnimating = false;
+            sortGenerator = null;
+            stats = { comparisons: 0, swaps: 0 };
+            
+            // In AR, allow re-placing the cubes
+            if (renderer.xr.isPresenting) {
+                cubesPlaced = false;
+                if (shadowPlane) shadowPlane.visible = false;
+            }
+
+            createCubes(parsedData);
+            updateUI(true);
+        }
+
+        function updateUI(isReady) {
+            const sortInteractable = isReady && (!renderer.xr.isPresenting || cubesPlaced);
+            document.getElementById('sort-btn').disabled = !sortInteractable;
+            document.getElementById('next-step-btn').disabled = !sortInteractable;
+            document.getElementById('array-input').disabled = !isReady && isSorting;
+            if (isReady) document.getElementById('sort-btn').textContent = 'Start Sort';
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- RENDER LOOP ---
+        function animate(timestamp, frame) {
+            if (!renderer.xr.isPresenting) controls.update();
+            
+            updateLabels();
+            updateUI(true);
+
+            // Handle AR hit-testing
+            if (frame) {
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const session = renderer.xr.getSession();
+                if (hitTestSourceRequested === false) {
+                    session.requestReferenceSpace('viewer').then(space => {
+                        session.requestHitTestSource({ space: space }).then(source => {
+                            hitTestSource = source;
+                        });
+                    });
+                    session.addEventListener('end', () => {
+                        hitTestSourceRequested = false;
+                        hitTestSource = null;
+                        reset(); // Reset to non-AR state
+                    });
+                    hitTestSourceRequested = true;
+                }
+
+                if (hitTestSource && !cubesPlaced) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                    } else {
+                        reticle.visible = false;
+                    }
+                }
+            }
+
+            if (isAutoSorting && !isAnimating && sortGenerator) {
+                setTimeout(() => {
+                    if (isAutoSorting) {
+                        if (sortGenerator.next().done) {
+                            sortGenerator = null;
+                            isAutoSorting = false;
+                        }
+                    }
+                }, animationSpeedMs);
+                isAnimating = true;
+                setTimeout(() => isAnimating = false, animationSpeedMs);
+            }
+            
+            renderer.render(scene, camera);
+        }
+        let hitTestSourceRequested = false; // Add this line in the global scope
+    </script>
+</body>
+</html>
