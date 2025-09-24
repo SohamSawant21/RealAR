@@ -6,11 +6,22 @@
     <title>Interactive 3D Bubble Sort with AR</title>
     
     <style>
+        /* Import a modern font */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+
+        :root {
+            --accent-color: #29d9d5; /* A vibrant teal */
+            --dark-bg: #121212;
+            --light-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
         body {
             margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            color: #fff;
-            background-color: #1a1a1a;
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: var(--text-color);
+            background-color: var(--dark-bg);
             overflow: hidden; /* Hide scrollbars */
         }
         
@@ -20,10 +31,10 @@
             top: 0;
             left: 0;
             width: 100%;
-            padding: 15px;
+            padding: 20px;
             box-sizing: border-box;
             z-index: 100;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.7), rgba(0,0,0,0));
+            background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
             pointer-events: none; /* Allow clicks to pass through to the canvas */
         }
 
@@ -38,85 +49,147 @@
         }
 
         .control-panel h1 {
-            margin: 0 0 10px 0;
-            font-weight: 400;
-            font-size: 1.8em;
+            margin: 0 0 15px 0;
+            font-weight: 500;
+            font-size: 2em;
             color: #fff;
-            text-shadow: 0 0 5px #000;
+            text-shadow: 0 0 10px rgba(41, 217, 213, 0.5);
         }
 
         .input-group {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 15px;
+            margin-bottom: 15px;
             flex-wrap: wrap;
         }
 
         .input-group label {
             font-size: 1em;
+            font-weight: 500;
         }
 
         .input-group input[type="text"] {
-            background-color: #333;
-            border: 1px solid #555;
+            background-color: var(--light-bg);
+            border: 2px solid #444;
             color: #fff;
-            padding: 8px;
-            border-radius: 6px;
-            width: 200px;
+            padding: 10px;
+            border-radius: 8px;
+            width: 250px;
             font-size: 1em;
-            transition: border-color 0.3s;
+            font-family: 'Poppins', sans-serif;
+            transition: all 0.3s ease;
+        }
+        
+        .input-group input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(41, 217, 213, 0.4);
         }
         
         .input-group input[type="text"].invalid {
             border-color: #e74c3c;
         }
 
-        .input-group input[type="range"] {
+        /* Custom Range Slider */
+        input[type=range] {
             width: 150px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #333;
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            margin-top: -6px; /* Center the thumb on the track */
+            box-shadow: 0 0 5px rgba(41, 217, 213, 0.7);
+            transition: transform 0.2s ease;
+        }
+        input[type=range]:active::-webkit-slider-thumb {
+            transform: scale(1.2);
         }
         
+        /* Buttons */
         .button-group button {
-            background-color: #444;
-            color: #fff;
-            border: 1px solid #666;
+            background-color: transparent;
+            color: var(--accent-color);
+            border: 2px solid var(--accent-color);
             padding: 10px 20px;
             font-size: 1em;
+            font-weight: 500;
             border-radius: 8px;
             cursor: pointer;
-            transition: background-color 0.3s, transform 0.1s;
+            transition: all 0.3s ease;
             margin: 5px;
         }
 
         .button-group button:hover:not(:disabled) {
-            background-color: #555;
+            background-color: var(--accent-color);
+            color: var(--dark-bg);
+            box-shadow: 0 0 15px rgba(41, 217, 213, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        /* Primary action button */
+        #sort-btn {
+            background-color: var(--accent-color);
+            color: var(--dark-bg);
+        }
+        
+        #sort-btn:hover:not(:disabled) {
+            background-color: #54e5e0;
         }
 
         .button-group button:active:not(:disabled) {
-            transform: scale(0.95);
+            transform: scale(0.98);
         }
 
         .button-group button:disabled {
-            background-color: #2b2b2b;
-            color: #777;
+            background-color: #2a2a2a;
+            color: #555;
+            border-color: #444;
             cursor: not-allowed;
+            transform: none;
         }
         
+        /* Glassmorphism Stats Panel */
         #stats-panel {
             position: absolute;
             bottom: 10px;
             left: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
+            background-color: rgba(30, 30, 30, 0.5);
+            -webkit-backdrop-filter: blur(10px); /* For Safari */
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
             padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 0.9em;
+            border-radius: 12px;
+            font-size: 1em;
             z-index: 100;
             pointer-events: none;
+            min-width: 250px;
         }
 
         #stats-panel p {
-            margin: 4px 0;
+            margin: 6px 0;
+        }
+        #stats-panel p span {
+            font-weight: 500;
+            color: #fff;
         }
 
         #ar-button {
@@ -126,19 +199,58 @@
             z-index: 101;
         }
 
+        /* 2D Labels */
         .label {
             position: absolute;
             color: white;
-            background-color: rgba(0, 0, 0, 0.6);
+            background-color: rgba(0, 0, 0, 0.7);
             padding: 5px 10px;
             border-radius: 5px;
             transform: translate(-50%, -50%); /* Center the label */
-            font-size: 16px;
+            font-size: 18px;
+            font-weight: 600;
             text-shadow: 0 0 3px black;
             pointer-events: none;
-                -webkit-user-select: none;
-                user-select: none;
+            -webkit-user-select: none;
+            user-select: none;
             transition: opacity 0.3s;
+        }
+
+        /* Responsive Design for Mobile */
+        @media (max-width: 768px) {
+            .control-panel h1 {
+                font-size: 1.5em;
+                margin-bottom: 10px;
+            }
+            .input-group {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .input-group input[type="text"] {
+                width: 90%;
+            }
+            .button-group {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            .button-group button {
+                padding: 8px 15px;
+                font-size: 0.9em;
+            }
+            #stats-panel {
+                bottom: 10px; /* Move to bottom left */
+                top: auto;
+                left: 10px;
+                transform: none; /* Remove centering */
+                width: auto; /* Adjust width to content */
+                max-width: 45%; /* Ensure it doesn't collide with AR button */
+                box-sizing: border-box;
+            }
+            #ar-button {
+                bottom: 15px;
+                right: 15px;
+            }
         }
     </style>
 
@@ -157,7 +269,7 @@
             <h1>Interactive 3D Bubble Sort</h1>
             <div class="input-group">
                 <label for="array-input">Array:</label>
-                <input type="text" id="array-input" value="8, 3, 2, 7">
+                <input type="text" id="array-input" value="8, 3, 2, 7, 6, 5, 4, 1">
                 <label for="speed-slider">Speed:</label>
                 <input type="range" id="speed-slider" min="50" max="1000" value="500" step="10">
             </div>
@@ -184,7 +296,7 @@
         import { ARButton } from 'three/addons/webxr/ARButton.js';
 
         // --- CONFIGURATION ---
-        const CUBE_COLOR = 0x007bff;
+        const CUBE_COLOR = 0x29d9d5;
         const HIGHLIGHT_COLOR = 0xffc107;
         const SORTED_COLOR = 0x28a745;
         let animationSpeedMs = 500;
@@ -195,9 +307,10 @@
         let isSorting = false, isAutoSorting = false, isAnimating = false;
         let sortGenerator = null;
         let stats = { comparisons: 0, swaps: 0 };
+        let autoSortTimeout = null;
         
         // --- AR-SPECIFIC STATE ---
-        let reticle, hitTestSource = null, cubesPlaced = false;
+        let reticle, hitTestSource = null, hitTestSourceRequested = false, cubesPlaced = false;
         let shadowPlane;
 
         // --- INITIALIZATION ---
@@ -215,23 +328,23 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.xr.enabled = true;
-            // Enable shadows
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             document.body.appendChild(renderer.domElement);
 
             // Lighting
-            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
             directionalLight.position.set(5, 10, 7.5);
-            // Enable light to cast shadows
             directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
             scene.add(directionalLight);
 
             // Controls
             controls = new OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
-            controls.target.set(0, 2, 0);
+            controls.target.set(0, 1.5, 0);
 
             // UI & Event Listeners
             setupUI();
@@ -256,14 +369,12 @@
         }
 
         function setupAR() {
-            // Create AR button and configure session
             const arButton = ARButton.createButton(renderer, { 
                 requiredFeatures: ['hit-test'] 
             });
             arButton.id = 'ar-button';
             document.body.appendChild(arButton);
             
-            // Reticle for surface detection
             reticle = new THREE.Mesh(
                 new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
                 new THREE.MeshBasicMaterial()
@@ -272,9 +383,8 @@
             reticle.visible = false;
             scene.add(reticle);
 
-            // Shadow plane for realism
             shadowPlane = new THREE.Mesh(
-                new THREE.PlaneGeometry(10, 10),
+                new THREE.PlaneGeometry(100, 100),
                 new THREE.ShadowMaterial({ opacity: 0.5 })
             );
             shadowPlane.rotation.x = -Math.PI / 2;
@@ -282,35 +392,33 @@
             shadowPlane.visible = false;
             scene.add(shadowPlane);
 
-            // Controller for tap-to-place gesture
             const controller = renderer.xr.getController(0);
             controller.addEventListener('select', onSelect);
             scene.add(controller);
         }
         
-        // --- OBJECT & LABEL CREATION ---
         function createCubes(dataArray) {
-            // Clean up old objects
             if (cubesGroup) scene.remove(cubesGroup);
             labels.forEach(label => label.element.remove());
             labels = [];
 
             cubesGroup = new THREE.Group();
-            const cubeWidth = 0.2; // Scaled down for AR
-            const spacing = 0.3;
+            const cubeWidth = 0.8;
+            const spacing = 1.0;
             const totalWidth = (dataArray.length - 1) * spacing;
             const labelContainer = document.getElementById('label-container');
+            const maxValue = Math.max(...dataArray, 1);
 
             dataArray.forEach((value, index) => {
-                const scaledValue = value * 0.2; // Scale height
-                const geometry = new THREE.BoxGeometry(cubeWidth, scaledValue, cubeWidth);
+                const scaledHeight = 0.5 + (value / maxValue) * 5; // Scale height more dynamically
+                const geometry = new THREE.BoxGeometry(cubeWidth, scaledHeight, cubeWidth);
                 const material = new THREE.MeshStandardMaterial({ color: CUBE_COLOR });
                 const cube = new THREE.Mesh(geometry, material);
-                cube.castShadow = true; // Cubes cast shadows
+                cube.castShadow = true;
                 
                 const xPos = index * spacing - totalWidth / 2;
-                cube.position.set(xPos, scaledValue / 2, 0);
-                cube.userData = { value: value };
+                cube.position.set(xPos, scaledHeight / 2, 0);
+                cube.userData = { value: value, sorted: false };
                 cubesGroup.add(cube);
 
                 const labelDiv = document.createElement('div');
@@ -320,25 +428,29 @@
                 labels.push({ cube: cube, element: labelDiv });
             });
             
-            if (renderer.xr.isPresenting) {
-                // Auto-place cubes 1 meter in front of camera
-                const camDir = new THREE.Vector3();
-                camera.getWorldDirection(camDir);
-                cubesGroup.position.copy(camera.position).add(camDir.multiplyScalar(1));
-                cubesGroup.visible = true;
-            } else {
-                cubesGroup.visible = true;
+            // For non-AR view, place it on a visible ground plane
+            if (!renderer.xr.isPresenting) {
+                 const ground = new THREE.Mesh(
+                    new THREE.PlaneGeometry(100, 100),
+                    new THREE.MeshStandardMaterial({color: 0x333333})
+                );
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                ground.position.y = -0.01;
+                cubesGroup.add(ground);
             }
+            
             scene.add(cubesGroup);
             updateStatsPanel();
         }
 
-        // --- SORTING LOGIC (Unchanged) ---
         function* bubbleSortGenerator() {
-            const cubes = cubesGroup.children.slice();
+            const cubes = cubesGroup.children.filter(c => c.isMesh && c.geometry.type === 'BoxGeometry');
             let n = cubes.length;
+            let swappedInPass;
 
             for (let i = 0; i < n - 1; i++) {
+                swappedInPass = false;
                 for (let j = 0; j < n - i - 1; j++) {
                     const cube1 = cubes[j];
                     const cube2 = cubes[j + 1];
@@ -352,9 +464,9 @@
                     if (cube1.userData.value > cube2.userData.value) {
                         isAnimating = true;
                         stats.swaps++;
-                        swapCubes(cube1, cube2).then(() => isAnimating = false);
-                        [cubes[j], cubes[j + 1]] = [cubes[j + 1], cubes[j]];
-                        yield;
+                        yield swapCubes(cube1, cube2); // Yield the promise
+                        [cubes[j], cubes[j + 1]] = [cubes[j + 1], cubes[j]]; // Update logical array after swap
+                        swappedInPass = true;
                     }
                     
                     if (!cube1.userData.sorted) cube1.material.color.set(CUBE_COLOR);
@@ -363,31 +475,42 @@
                 const sortedCube = cubes[n - 1 - i];
                 sortedCube.material.color.set(SORTED_COLOR);
                 sortedCube.userData.sorted = true;
+                
+                if (!swappedInPass) break;
             }
-            if (n > 0) {
-                cubes[0].material.color.set(SORTED_COLOR);
-                cubes[0].userData.sorted = true;
-            }
-            updateUI(false);
+            
+            cubes.forEach(c => {
+                c.material.color.set(SORTED_COLOR);
+                c.userData.sorted = true;
+            });
+            
+            // Final cleanup
+            isSorting = false;
+            isAutoSorting = false;
+            sortGenerator = null;
         }
 
-        // --- ANIMATION & HELPERS ---
         function swapCubes(cube1, cube2) {
             return new Promise(resolve => {
                 const pos1_x = cube1.position.x;
                 const pos2_x = cube2.position.x;
-                const duration = animationSpeedMs / 2;
+                const duration = animationSpeedMs * 0.8; 
                 let startTime = null;
+                
                 function animateSwap(time) {
                     if (!startTime) startTime = time;
                     const progress = Math.min((time - startTime) / duration, 1);
+                    
                     cube1.position.x = pos1_x + (pos2_x - pos1_x) * progress;
                     cube2.position.x = pos2_x + (pos1_x - pos2_x) * progress;
-                    if (progress < 1) requestAnimationFrame(animateSwap);
-                    else {
+
+                    if (progress < 1) {
+                        requestAnimationFrame(animateSwap);
+                    } else {
                         cube1.position.x = pos2_x;
                         cube2.position.x = pos1_x;
                         updateStatsPanel();
+                        isAnimating = false; // Animation is done
                         resolve();
                     }
                 }
@@ -395,27 +518,17 @@
             });
         }
         
-        function animatePlacement(targetScale) {
-            const duration = 300; // ms
-            let startTime = null;
-            const startScale = cubesGroup.scale.clone();
-            function animateScale(time) {
-                if (!startTime) startTime = time;
-                const progress = Math.min((time - startTime) / duration, 1);
-                cubesGroup.scale.lerpVectors(startScale, targetScale, progress);
-                if (progress < 1) requestAnimationFrame(animateScale);
-            }
-            requestAnimationFrame(animateScale);
-        }
-
         function updateLabels() {
-            if (!cubesGroup.visible) return;
+            if (!cubesGroup || !cubesGroup.visible) {
+                 labels.forEach(l => l.element.style.opacity = '0');
+                 return;
+            }
             labels.forEach(label => {
                 const { cube, element } = label;
                 const vector = new THREE.Vector3();
                 const cubeHeight = cube.geometry.parameters.height;
                 cube.getWorldPosition(vector);
-                vector.y += cubeHeight / 2 + 0.1; // Position above cube
+                vector.y += (cubeHeight * cube.scale.y) / 2 + 0.3; 
                 vector.project(camera);
 
                 const x = (vector.x * .5 + .5) * renderer.domElement.clientWidth;
@@ -431,78 +544,158 @@
             document.getElementById('swaps-stat').textContent = stats.swaps;
             if (!cubesGroup) return;
             const currentArray = cubesGroup.children
-                .slice().sort((a, b) => a.position.x - b.position.x)
+                .filter(c => c.isMesh && c.geometry.type === 'BoxGeometry')
+                .sort((a, b) => a.position.x - b.position.x)
                 .map(c => c.userData.value).join(', ');
             document.getElementById('array-stat').textContent = `[${currentArray}]`;
         }
 
-        // --- EVENT HANDLERS ---
         function onSelect() {
             if (reticle.visible) {
                 cubesGroup.position.setFromMatrixPosition(reticle.matrix);
-                cubesGroup.quaternion.setFromRotationMatrix(reticle.matrix);
-                cubesGroup.visible = true;
                 cubesPlaced = true;
+                cubesGroup.visible = true;
                 
-                shadowPlane.position.setFromMatrixPosition(reticle.matrix);
+                shadowPlane.position.copy(cubesGroup.position);
+                shadowPlane.position.y = cubesGroup.position.y - 0.01;
                 shadowPlane.visible = true;
-                
-                // Animate scale on placement
-                cubesGroup.scale.set(0, 0, 0);
-                animatePlacement(new THREE.Vector3(1, 1, 1));
             }
         }
 
         function toggleAutoSort() {
+            if (isAnimating) return;
+
             isAutoSorting = !isAutoSorting;
-            document.getElementById('sort-btn').textContent = isAutoSorting ? 'Pause' : 'Start Sort';
-            if (isAutoSorting && !isSorting) {
-                isSorting = true;
-                sortGenerator = bubbleSortGenerator();
-                document.getElementById('next-step-btn').disabled = true;
+            
+            if (isAutoSorting) {
+                if (!isSorting) {
+                    isSorting = true;
+                    sortGenerator = bubbleSortGenerator();
+                }
+                document.getElementById('sort-btn').textContent = 'Pause';
+                runAutoSortStep();
+            } else {
+                clearTimeout(autoSortTimeout);
+                document.getElementById('sort-btn').textContent = 'Start Sort';
+            }
+            updateUI();
+        }
+
+        function runAutoSortStep() {
+            if (!isAutoSorting || !sortGenerator) return;
+
+            if (isAnimating) {
+                autoSortTimeout = setTimeout(runAutoSortStep, 50);
+                return;
+            }
+
+            const result = sortGenerator.next();
+
+            if (result.done) {
+                updateUI();
+                return;
+            }
+
+            if (result.value instanceof Promise) {
+                result.value.then(() => {
+                    autoSortTimeout = setTimeout(runAutoSortStep, animationSpeedMs);
+                });
+            } else {
+                autoSortTimeout = setTimeout(runAutoSortStep, animationSpeedMs);
             }
         }
         
-        function nextStep() {
+        async function nextStep() {
+            if (isAnimating || isAutoSorting) return;
+
             if (!isSorting) {
                 isSorting = true;
                 sortGenerator = bubbleSortGenerator();
             }
-            if (!isAnimating && sortGenerator) {
-                if (sortGenerator.next().done) sortGenerator = null;
+            
+            if (!sortGenerator) return;
+
+            isAnimating = true; // Block other actions during the full step
+            updateUI();
+
+            // --- A FULL LOGICAL STEP ---
+            // 1. Perform comparison (highlights cubes)
+            let result = sortGenerator.next();
+            if (result.done) {
+                isAnimating = false;
+                updateUI();
+                return;
             }
+
+            // Pause briefly to let user see the comparison
+            await new Promise(resolve => setTimeout(resolve, Math.min(animationSpeedMs, 300)));
+            
+            // 2. Perform potential swap or just color reset
+            result = sortGenerator.next();
+            if (result.done) {
+                 isAnimating = false;
+                 updateUI();
+                 return;
+            }
+
+            // If the step returned a promise (the swap animation), wait for it.
+            // isAnimating is set to false inside the promise resolution.
+            if (result.value instanceof Promise) {
+                await result.value;
+            } else {
+                // If there was no swap, isAnimating was not reset, so do it now.
+                isAnimating = false;
+            }
+            // --- END OF LOGICAL STEP ---
+            
+            updateUI();
         }
         
         function reset() {
-            const inputElement = document.getElementById('array-input');
-            const parsedData = inputElement.value.split(',').map(n => parseFloat(n.trim())).filter(n => !isNaN(n) && n > 0);
-            
-            inputElement.classList.remove('invalid');
-            if (parsedData.length === 0) {
-                inputElement.classList.add('invalid');
-                return;
-            }
-            
-            isSorting = false; isAutoSorting = false; isAnimating = false;
+            if (autoSortTimeout) clearTimeout(autoSortTimeout);
+
+            isSorting = false;
+            isAutoSorting = false;
+            isAnimating = false;
             sortGenerator = null;
             stats = { comparisons: 0, swaps: 0 };
             
-            // In AR, allow re-placing the cubes
             if (renderer.xr.isPresenting) {
                 cubesPlaced = false;
                 if (shadowPlane) shadowPlane.visible = false;
+                if(cubesGroup) cubesGroup.visible = false;
             }
 
+            const inputElement = document.getElementById('array-input');
+            const parsedData = inputElement.value.split(',')
+                .map(n => parseFloat(n.trim()))
+                .filter(n => !isNaN(n) && n > 0);
+            
+            inputElement.classList.remove('invalid');
+            if (parsedData.length === 0 || parsedData.length > 20) {
+                inputElement.classList.add('invalid');
+                if (parsedData.length > 20) alert("Please enter 20 elements or fewer for the best experience.");
+                return;
+            }
+            
             createCubes(parsedData);
-            updateUI(true);
+            updateUI();
         }
 
-        function updateUI(isReady) {
-            const sortInteractable = isReady;
-            document.getElementById('sort-btn').disabled = !sortInteractable;
-            document.getElementById('next-step-btn').disabled = !sortInteractable;
-            document.getElementById('array-input').disabled = !isReady && isSorting;
-            if (isReady) document.getElementById('sort-btn').textContent = 'Start Sort';
+        function updateUI() {
+            const isBusy = isSorting || isAnimating;
+            
+            document.getElementById('next-step-btn').disabled = isAnimating || isAutoSorting;
+            document.getElementById('reset-btn').disabled = isBusy;
+            document.getElementById('array-input').disabled = isBusy;
+            
+            if (isAutoSorting) {
+                document.getElementById('sort-btn').textContent = 'Pause';
+                document.getElementById('sort-btn').disabled = false; // Allow pausing
+            } else {
+                 document.getElementById('sort-btn').textContent = 'Start Sort';
+                 document.getElementById('sort-btn').disabled = isBusy;
+            }
         }
 
         function onWindowResize() {
@@ -511,17 +704,15 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // --- RENDER LOOP ---
         function animate(timestamp, frame) {
             if (!renderer.xr.isPresenting) controls.update();
             
             updateLabels();
-            updateUI(true);
 
-            // Handle AR hit-testing
             if (frame) {
                 const referenceSpace = renderer.xr.getReferenceSpace();
                 const session = renderer.xr.getSession();
+
                 if (hitTestSourceRequested === false) {
                     session.requestReferenceSpace('viewer').then(space => {
                         session.requestHitTestSource({ space: space }).then(source => {
@@ -531,39 +722,33 @@
                     session.addEventListener('end', () => {
                         hitTestSourceRequested = false;
                         hitTestSource = null;
-                        reset(); // Reset to non-AR state
+                        shadowPlane.visible = false;
+                        controls.reset();
+                        camera.position.set(0, 5, 12);
+                        controls.target.set(0, 1.5, 0);
+                        reset();
                     });
                     hitTestSourceRequested = true;
                 }
 
-                if (hitTestSource && !cubesPlaced) {
-                    const hitTestResults = frame.getHitTestResults(hitTestSource);
-                    if (hitTestResults.length > 0) {
-                        const hit = hitTestResults[0];
-                        reticle.visible = true;
-                        reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                if (hitTestSource) {
+                    if (!cubesPlaced) {
+                        const hitTestResults = frame.getHitTestResults(hitTestSource);
+                        if (hitTestResults.length > 0) {
+                            const hit = hitTestResults[0];
+                            reticle.visible = true;
+                            reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                        } else {
+                            reticle.visible = false;
+                        }
                     } else {
                         reticle.visible = false;
                     }
                 }
             }
-
-            if (isAutoSorting && !isAnimating && sortGenerator) {
-                setTimeout(() => {
-                    if (isAutoSorting) {
-                        if (sortGenerator.next().done) {
-                            sortGenerator = null;
-                            isAutoSorting = false;
-                        }
-                    }
-                }, animationSpeedMs);
-                isAnimating = true;
-                setTimeout(() => isAnimating = false, animationSpeedMs);
-            }
             
             renderer.render(scene, camera);
         }
-        let hitTestSourceRequested = false; // Add this line in the global scope
     </script>
 </body>
 </html>
