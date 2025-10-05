@@ -310,7 +310,7 @@
         let autoSortTimeout = null;
         
         // --- AR-SPECIFIC STATE ---
-        let cubesPlaced = false;
+        let reticle, hitTestSource = null, hitTestSourceRequested = false;
         let shadowPlane;
 
         // --- INITIALIZATION ---
@@ -369,26 +369,21 @@
         }
 
         function setupAR() {
-            // MODIFIED: Changed hit-test to optionalFeatures to remove startup delay.
             const arButton = ARButton.createButton(renderer, { 
                 optionalFeatures: ['hit-test'] 
             });
             arButton.id = 'ar-button';
             document.body.appendChild(arButton);
             
-            // ADDED: Listener to reset scene when AR session ends.
-            renderer.xr.addEventListener('sessionstart', () => {
-                const session = renderer.xr.getSession();
-                session.addEventListener('end', () => {
-                    shadowPlane.visible = false;
-                    controls.reset();
-                    camera.position.set(0, 5, 12);
-                    controls.target.set(0, 1.5, 0);
-                    reset();
-                });
-            });
-
-            // MODIFIED: Removed reticle logic.
+            // MODIFIED: Re-added reticle for visual guidance.
+            reticle = new THREE.Mesh(
+                new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
+                new THREE.MeshBasicMaterial()
+            );
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+            
             shadowPlane = new THREE.Mesh(
                 new THREE.PlaneGeometry(100, 100),
                 new THREE.ShadowMaterial({ opacity: 0.5 })
@@ -416,7 +411,7 @@
             const maxValue = Math.max(...dataArray, 1);
 
             dataArray.forEach((value, index) => {
-                const scaledHeight = 0.5 + (value / maxValue) * 5; // Scale height more dynamically
+                const scaledHeight = 0.5 + (value / maxValue) * 5; 
                 const geometry = new THREE.BoxGeometry(cubeWidth, scaledHeight, cubeWidth);
                 const material = new THREE.MeshStandardMaterial({ color: CUBE_COLOR });
                 const cube = new THREE.Mesh(geometry, material);
@@ -434,7 +429,6 @@
                 labels.push({ cube: cube, element: labelDiv });
             });
             
-            // For non-AR view, place it on a visible ground plane
             if (!renderer.xr.isPresenting) {
                  const ground = new THREE.Mesh(
                     new THREE.PlaneGeometry(100, 100),
@@ -470,8 +464,8 @@
                     if (cube1.userData.value > cube2.userData.value) {
                         isAnimating = true;
                         stats.swaps++;
-                        yield swapCubes(cube1, cube2); // Yield the promise
-                        [cubes[j], cubes[j + 1]] = [cubes[j + 1], cubes[j]]; // Update logical array after swap
+                        yield swapCubes(cube1, cube2); 
+                        [cubes[j], cubes[j + 1]] = [cubes[j + 1], cubes[j]]; 
                         swappedInPass = true;
                     }
                     
@@ -490,7 +484,6 @@
                 c.userData.sorted = true;
             });
             
-            // Final cleanup
             isSorting = false;
             isAutoSorting = false;
             sortGenerator = null;
@@ -516,7 +509,7 @@
                         cube1.position.x = pos2_x;
                         cube2.position.x = pos1_x;
                         updateStatsPanel();
-                        isAnimating = false; // Animation is done
+                        isAnimating = false; 
                         resolve();
                     }
                 }
@@ -556,37 +549,33 @@
             document.getElementById('array-stat').textContent = `[${currentArray}]`;
         }
 
-        // MODIFIED: Rewritten onSelect for viewer-relative placement.
+        // MODIFIED: Polished onSelect for hybrid placement.
         function onSelect() {
-            // Only place the cubes once per AR session.
-            if (cubesPlaced) {
-                return;
+            // Priority 1: If the reticle is visible, place on a real-world surface.
+            if (reticle.visible) {
+                cubesGroup.position.setFromMatrixPosition(reticle.matrix);
+                cubesGroup.quaternion.set(0, 0, 0, 1); // Reset rotation
+            } else {
+                // Priority 2 (Fallback): Place 2 meters in front of the camera.
+                const position = new THREE.Vector3();
+                position.set(0, 0, -2.0).applyMatrix4(camera.matrixWorld);
+                cubesGroup.position.copy(position);
+
+                // Orient the cubesGroup to face the user, but keep it upright.
+                const lookAtPos = new THREE.Vector3(
+                    camera.position.x,
+                    cubesGroup.position.y, // Use the cube's y-level to prevent tilting.
+                    camera.position.z
+                );
+                cubesGroup.lookAt(lookAtPos);
             }
-
-            // 1. Calculate a position 1.5 meters in front of the camera.
-            const position = new THREE.Vector3();
-            // Set the vector to (0, 0, -1.5) in camera's local space and then transform it to world space.
-            position.set(0, 0, -1.5).applyMatrix4(camera.matrixWorld);
-
-            // 2. Move the cubesGroup to this new position.
-            cubesGroup.position.copy(position);
-
-            // 3. Orient the cubesGroup to face the user, but keep it upright.
-            const lookAtPos = new THREE.Vector3(
-                camera.position.x,
-                cubesGroup.position.y, // Use the cube's y-level to prevent tilting.
-                camera.position.z
-            );
-            cubesGroup.lookAt(lookAtPos);
-
-            // 4. Position the shadowPlane underneath the placed cubes.
+            
+            // Position the shadow plane correctly underneath the cubes.
             shadowPlane.position.copy(cubesGroup.position);
             shadowPlane.position.y -= 0.01;
 
-            // 5. Make both visible and set the flag.
             cubesGroup.visible = true;
             shadowPlane.visible = true;
-            cubesPlaced = true;
         }
 
         function toggleAutoSort() {
@@ -642,11 +631,9 @@
             
             if (!sortGenerator) return;
 
-            isAnimating = true; // Block other actions during the full step
+            isAnimating = true; 
             updateUI();
 
-            // --- A FULL LOGICAL STEP ---
-            // 1. Perform comparison (highlights cubes)
             let result = sortGenerator.next();
             if (result.done) {
                 isAnimating = false;
@@ -654,10 +641,8 @@
                 return;
             }
 
-            // Pause briefly to let user see the comparison
             await new Promise(resolve => setTimeout(resolve, Math.min(animationSpeedMs, 300)));
             
-            // 2. Perform potential swap or just color reset
             result = sortGenerator.next();
             if (result.done) {
                  isAnimating = false;
@@ -665,15 +650,11 @@
                  return;
             }
 
-            // If the step returned a promise (the swap animation), wait for it.
-            // isAnimating is set to false inside the promise resolution.
             if (result.value instanceof Promise) {
                 await result.value;
             } else {
-                // If there was no swap, isAnimating was not reset, so do it now.
                 isAnimating = false;
             }
-            // --- END OF LOGICAL STEP ---
             
             updateUI();
         }
@@ -688,7 +669,6 @@
             stats = { comparisons: 0, swaps: 0 };
             
             if (renderer.xr.isPresenting) {
-                cubesPlaced = false;
                 if (shadowPlane) shadowPlane.visible = false;
                 if(cubesGroup) cubesGroup.visible = false;
             }
@@ -718,7 +698,7 @@
             
             if (isAutoSorting) {
                 document.getElementById('sort-btn').textContent = 'Pause';
-                document.getElementById('sort-btn').disabled = false; // Allow pausing
+                document.getElementById('sort-btn').disabled = false;
             } else {
                  document.getElementById('sort-btn').textContent = 'Start Sort';
                  document.getElementById('sort-btn').disabled = isBusy;
@@ -736,11 +716,44 @@
             
             updateLabels();
 
-            // MODIFIED: Removed the entire hit-testing block that was here.
-            // The new placement logic is now entirely within the onSelect function.
+            // MODIFIED: Re-added hit-test logic for the reticle visual guide.
+            if (frame) {
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const session = renderer.xr.getSession();
+
+                if (hitTestSourceRequested === false) {
+                    session.requestReferenceSpace('viewer').then(space => {
+                        session.requestHitTestSource({ space: space }).then(source => {
+                            hitTestSource = source;
+                        });
+                    });
+                    session.addEventListener('end', () => {
+                        hitTestSourceRequested = false;
+                        hitTestSource = null;
+                        shadowPlane.visible = false;
+                        controls.reset();
+                        camera.position.set(0, 5, 12);
+                        controls.target.set(0, 1.5, 0);
+                        reset();
+                    });
+                    hitTestSourceRequested = true;
+                }
+
+                if (hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+                    } else {
+                        reticle.visible = false;
+                    }
+                }
+            }
             
             renderer.render(scene, camera);
         }
     </script>
 </body>
 </html>
+
