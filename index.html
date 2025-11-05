@@ -198,6 +198,28 @@
             right: 20px;
             z-index: 101;
         }
+        
+        /* --- CHANGE 1: Style for the new AR prompt --- */
+        #ar-prompt {
+            position: absolute;
+            bottom: 80px; /* Above the AR button */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            z-index: 101;
+            font-size: 0.9em;
+            font-weight: 500;
+            text-align: center;
+            pointer-events: none;
+            display: none; /* Hidden by default */
+            -webkit-backdrop-filter: blur(5px);
+            backdrop-filter: blur(5px);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
 
         /* 2D Labels */
         .label {
@@ -251,6 +273,12 @@
                 bottom: 15px;
                 right: 15px;
             }
+            
+            /* --- CHANGE 1 (Continued): Responsive style for AR prompt --- */
+            #ar-prompt {
+                bottom: 70px;
+                width: calc(100% - 40px);
+            }
         }
     </style>
 
@@ -289,6 +317,11 @@
 
     <!-- Container for 2D labels that overlay the 3D scene -->
     <div id="label-container"></div>
+    
+    <!-- --- CHANGE 2: Add the new AR prompt element --- -->
+    <div id="ar-prompt">
+        <p>Move your phone to find a surface, then tap to place.</p>
+    </div>
 
     <script type="module">
         import * as THREE from 'three';
@@ -312,8 +345,8 @@
         // --- AR-SPECIFIC STATE ---
         let reticle, hitTestSource = null, hitTestSourceRequested = false;
         let shadowPlane;
-        let placementAnchor = null; // ADDED: To store the WebXR anchor for stability
-        let anchorRequestPending = false; // ADDED: Flag to trigger object placement/anchoring
+        let placementAnchor = null; 
+        let anchorRequestPending = false; 
 
         // --- INITIALIZATION ---
         init();
@@ -371,13 +404,24 @@
         }
 
         function setupAR() {
-            // MODIFIED: Request 'anchors' feature for improved stability.
             const arButton = ARButton.createButton(renderer, { 
                 requiredFeatures: ['hit-test'],
                 optionalFeatures: ['anchors'] 
             });
             arButton.id = 'ar-button';
             document.body.appendChild(arButton);
+            
+            // --- CHANGE 3: Show the AR prompt when the session starts ---
+            const arPrompt = document.getElementById('ar-prompt');
+            arButton.addEventListener('click', () => {
+                // This is a workaround since ARButton has no direct 'onsessionstart'
+                // We'll check if the session is active shortly after the click
+                setTimeout(() => {
+                    if (renderer.xr.isPresenting) {
+                        arPrompt.style.display = 'block';
+                    }
+                }, 500); // Give it a moment to start
+            });
             
             reticle = new THREE.Mesh(
                 new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
@@ -397,7 +441,6 @@
             scene.add(shadowPlane);
 
             const controller = renderer.xr.getController(0);
-            // MODIFIED: Simplified controller 'select' event to just flag a placement request.
             controller.addEventListener('select', () => {
                 anchorRequestPending = true;
             });
@@ -525,8 +568,8 @@
         
         function updateLabels() {
             if (!cubesGroup || !cubesGroup.visible) {
-                 labels.forEach(l => l.element.style.opacity = '0');
-                 return;
+                labels.forEach(l => l.element.style.opacity = '0');
+                return;
             }
             labels.forEach(label => {
                 const { cube, element } = label;
@@ -622,9 +665,9 @@
             
             result = sortGenerator.next();
             if (result.done) {
-                 isAnimating = false;
-                 updateUI();
-                 return;
+                isAnimating = false;
+                updateUI();
+                return;
             }
 
             if (result.value instanceof Promise) {
@@ -644,11 +687,14 @@
             isAnimating = false;
             sortGenerator = null;
             stats = { comparisons: 0, swaps: 0 };
-            placementAnchor = null; // MODIFIED: Clear any existing anchor on reset
+            placementAnchor = null; 
             
             if (renderer.xr.isPresenting) {
                 if (shadowPlane) shadowPlane.visible = false;
                 if(cubesGroup) cubesGroup.visible = false;
+                
+                // --- CHANGE 4: Show the prompt again if AR is reset ---
+                document.getElementById('ar-prompt').style.display = 'block';
             }
 
             const inputElement = document.getElementById('array-input');
@@ -689,8 +735,8 @@
                 document.getElementById('sort-btn').textContent = 'Pause';
                 document.getElementById('sort-btn').disabled = false;
             } else {
-                 document.getElementById('sort-btn').textContent = 'Start Sort';
-                 document.getElementById('sort-btn').disabled = isBusy;
+                document.getElementById('sort-btn').textContent = 'Start Sort';
+                document.getElementById('sort-btn').disabled = isBusy;
             }
         }
 
@@ -705,7 +751,6 @@
             
             updateLabels();
 
-            // MODIFIED: Entire AR logic is now centralized here for stability.
             if (frame) {
                 const referenceSpace = renderer.xr.getReferenceSpace();
                 const session = renderer.xr.getSession();
@@ -720,11 +765,15 @@
                     session.addEventListener('end', () => {
                         hitTestSourceRequested = false;
                         hitTestSource = null;
-                        placementAnchor = null; // Clear anchor on session end
+                        placementAnchor = null; 
                         shadowPlane.visible = false;
                         controls.reset();
                         camera.position.set(0, 5, 12);
                         controls.target.set(0, 1.5, 0);
+                        
+                        // --- CHANGE 5: Hide prompt on session end ---
+                        document.getElementById('ar-prompt').style.display = 'none';
+                        
                         reset();
                     });
                     hitTestSourceRequested = true;
@@ -739,20 +788,24 @@
                         hitPose = hit.getPose(referenceSpace);
                         reticle.visible = true;
                         reticle.matrix.fromArray(hitPose.transform.matrix);
+                        
+                        // --- CHANGE 6: Hide prompt once a surface is found ---
+                        document.getElementById('ar-prompt').style.display = 'none';
+                        
                     } else {
                         reticle.visible = false;
                     }
                 }
                 
+                // --- CHANGE 7: THIS IS THE MAIN FIX ---
                 // --- 2. Handle placement request from controller tap ---
                 if (anchorRequestPending) {
-                    anchorRequestPending = false;
                     
-                    // If a surface was found, create a persistent anchor.
-                if (hitPose) {
+                    // Only proceed if a hit test is valid (reticle is visible)
+                    if (hitPose) {
                         // Success! Create the anchor and reset the flag.
                         anchorRequestPending = false; 
-                        
+
                         frame.createAnchor(hitPose.transform, referenceSpace).then(anchor => {
                             placementAnchor = anchor;
                             cubesGroup.visible = true;
@@ -760,19 +813,19 @@
                         }, (error) => {
                             console.error("Could not create anchor: " + error);
                         });
-                    } 
-                    // Fallback: If no surface, place transiently in front of the camera.
-            
+                    }
+                    // If hitPose is null, do nothing.
+                    // The 'anchorRequestPending' flag remains true.
+                    // The app will keep trying to place on the next frame.
+                }
                 
                 // --- 3. Update object pose from anchor every frame ---
                 if (placementAnchor) {
                     const pose = frame.getPose(placementAnchor.anchorSpace, referenceSpace);
                     if (pose) {
-                        // Update main content from the anchor's matrix
                         cubesGroup.matrix.fromArray(pose.transform.matrix);
                         cubesGroup.matrixAutoUpdate = false;
 
-                        // Update shadow plane to be at the anchor's base but always horizontal
                         const anchorPosition = new THREE.Vector3().setFromMatrixPosition(pose.transform.matrix);
                         shadowPlane.position.copy(anchorPosition);
                         shadowPlane.position.y -= 0.01; // Small offset
