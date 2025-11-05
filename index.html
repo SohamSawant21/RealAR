@@ -749,7 +749,10 @@
                     anchorRequestPending = false;
                     
                     // If a surface was found, create a persistent anchor.
-                    if (hitPose) {
+                if (hitPose) {
+                        // Success! Create the anchor and reset the flag.
+                        anchorRequestPending = false; 
+                        
                         frame.createAnchor(hitPose.transform, referenceSpace).then(anchor => {
                             placementAnchor = anchor;
                             cubesGroup.visible = true;
@@ -759,24 +762,7 @@
                         });
                     } 
                     // Fallback: If no surface, place transiently in front of the camera.
-                    else {
-                        placementAnchor = null; // Not anchored
-                        cubesGroup.matrixAutoUpdate = true;
-                        shadowPlane.matrixAutoUpdate = true;
-
-                        const position = new THREE.Vector3(0, 0, -2.0).applyMatrix4(camera.matrixWorld);
-                        cubesGroup.position.copy(position);
-                        const lookAtPos = new THREE.Vector3(camera.position.x, cubesGroup.position.y, camera.position.z);
-                        cubesGroup.lookAt(lookAtPos);
-                        
-                        shadowPlane.position.copy(cubesGroup.position);
-                        shadowPlane.position.y -= 0.01;
-                        shadowPlane.quaternion.set(0,0,0,1).rotateX(-Math.PI / 2);
-
-                        cubesGroup.visible = true;
-                        shadowPlane.visible = true;
-                    }
-                }
+            
                 
                 // --- 3. Update object pose from anchor every frame ---
                 if (placementAnchor) {
