@@ -199,7 +199,37 @@
             z-index: 101;
         }
         
-        /* --- REMOVED: AR UI Container styles are no longer needed --- */
+        /* --- NEW/MODIFIED: Container for AR UI (re-added) --- */
+        #ar-ui-container {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 101;
+            pointer-events: none;
+            display: none; /* Hidden by default */
+            width: 100%;
+        }
+        
+        #ar-prompt {
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            font-weight: 500;
+            text-align: center;
+            -webkit-backdrop-filter: blur(5px);
+            backdrop-filter: blur(5px);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            max-width: 80%;
+        }
+
+        /* --- REMOVED: Fallback button style --- */
 
         /* 2D Labels */
         .label {
@@ -254,7 +284,11 @@
                 right: 15px;
             }
             
-            /* --- REMOVED: AR UI Container responsive styles --- */
+            /* --- NEW/MODIFIED: AR UI responsive styles (re-added) --- */
+            #ar-ui-container {
+                bottom: 70px;
+                width: calc(100% - 40px);
+            }
         }
     </style>
 
@@ -294,456 +328,578 @@
     <!-- Container for 2D labels that overlay the 3D scene -->
     <div id="label-container"></div>
     
-    <!-- --- REMOVED: AR UI Container HTML is no longer needed --- -->
+    <!-- --- NEW/MODIFIED: AR UI Container (re-added) --- -->
+    <div id="ar-ui-container">
+        <div id="ar-prompt">Move your phone to find a surface...</div>
+        <!-- --- REMOVED: Fallback button --- -->
+    </div>
 
-<script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { ARButton } from 'three/addons/webxr/ARButton.js';
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
 
-    // --- CONFIGURATION ---
-    const CUBE_COLOR = 0x29d9d5;
-    const HIGHLIGHT_COLOR = 0xffc107;
-    const SORTED_COLOR = 0x28a745;
-    let animationSpeedMs = 500;
+        // --- CONFIGURATION ---
+        const CUBE_COLOR = 0x29d9d5;
+        const HIGHLIGHT_COLOR = 0xffc107;
+        const SORTED_COLOR = 0x28a745;
+        let animationSpeedMs = 500;
 
-    // --- GLOBAL STATE ---
-    let scene, camera, renderer, controls;
-    let cubesGroup, labels = [];
-    let isSorting = false, isAutoSorting = false, isAnimating = false;
-    let sortGenerator = null;
-    let stats = { comparisons: 0, swaps: 0 };
-    let autoSortTimeout = null;
-    
-    // --- AR STATE ---
-    let hitTestSource = null;
-    let hitTestSourceRequested = false;
-    let reticle, contentPlaced = false;
-    let shadowPlane;
-    let anchor = null; // XRAnchor
+        // --- GLOBAL STATE ---
+        let scene, camera, renderer, controls;
+        let cubesGroup, labels = [];
+        let isSorting = false, isAutoSorting = false, isAnimating = false;
+        let sortGenerator = null;
+        let stats = { comparisons: 0, swaps: 0 };
+        let autoSortTimeout = null;
+        
+        // --- AR-SPECIFIC STATE ---
+        // --- NEW/MODIFIED: Re-added state for hit-testing ---
+        let reticle, hitTestSource = null, hitTestSourceRequested = false;
+        let shadowPlane;
+        let placementAnchor = null; 
+        let anchorRequestPending = false;
+        
+        // --- AR UI Elements ---
+        let arUIContainer, arPrompt;
 
-    // --- INITIALIZATION ---
-    init();
 
-    function init() {
-        // Scene & Camera
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 5, 12);
+        // --- INITIALIZATION ---
+        init();
 
-        // Renderer
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.xr.enabled = true;
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.body.appendChild(renderer.domElement);
+        function init() {
+            // Scene & Camera
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 12);
+            camera.lookAt(0, 0, 0);
 
-        // Lighting
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        directionalLight.position.set(5, 10, 7.5);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 1024;
-        directionalLight.shadow.mapSize.height = 1024;
-        scene.add(directionalLight);
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.xr.enabled = true;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
 
-        // Controls (desktop only)
-        controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.target.set(0, 1.5, 0);
+            // Lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            directionalLight.position.set(5, 10, 7.5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            scene.add(directionalLight);
 
-        // AR Reticle (visual aid for placement)
-        createReticle();
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.target.set(0, 1.5, 0);
 
-        // Shadow plane (receives cube shadows)
-        shadowPlane = new THREE.Mesh(
-            new THREE.PlaneGeometry(100, 100),
-            new THREE.ShadowMaterial({ opacity: 0.4 })
-        );
-        shadowPlane.rotation.x = -Math.PI / 2;
-        shadowPlane.receiveShadow = true;
-        shadowPlane.visible = false;
-        scene.add(shadowPlane);
+            // UI & Event Listeners
+            setupUI();
+            setupAR();
 
-        // UI & AR Setup
-        setupUI();
-        setupAR();
+            // Initial scene setup
+            reset();
+            
+            // Render loop
+            renderer.setAnimationLoop(animate);
+        }
 
-        // Initial content
-        reset();
-        renderer.setAnimationLoop(animate);
-    }
+        function setupUI() {
+            document.getElementById('sort-btn').addEventListener('click', toggleAutoSort);
+            document.getElementById('reset-btn').addEventListener('click', reset);
+            document.getElementById('next-step-btn').addEventListener('click', nextStep);
+            document.getElementById('speed-slider').addEventListener('input', (e) => {
+                animationSpeedMs = 1050 - e.target.value;
+            });
+            document.getElementById('array-input').addEventListener('change', reset);
+            window.addEventListener('resize', onWindowResize, false);
+            
+            /* --- NEW/MODIFIED: Get AR UI elements --- */
+            arUIContainer = document.getElementById('ar-ui-container');
+            arPrompt = document.getElementById('ar-prompt');
+        }
 
-    function createReticle() {
-        const ringGeometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
-        const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 0.8, transparent: true });
-        reticle = new THREE.Mesh(ringGeometry, ringMaterial);
-        reticle.matrixAutoUpdate = false;
-        reticle.visible = false;
-        scene.add(reticle);
-    }
+        function setupAR() {
+            // --- NEW/MODIFIED: Request 'hit-test' and 'anchors' ---
+            const arButton = ARButton.createButton(renderer, { 
+                requiredFeatures: ['hit-test'],
+                optionalFeatures: ['anchors'] 
+            });
+            arButton.id = 'ar-button';
+            document.body.appendChild(arButton);
+            
+            /* --- NEW/MODIFIED: Show AR UI on session start --- */
+            arButton.addEventListener('click', () => {
+                setTimeout(() => {
+                    if (renderer.xr.isPresenting) {
+                        arUIContainer.style.display = 'flex';
+                        arPrompt.textContent = "Move your phone to find a surface...";
+                    }
+                }, 500);
+            });
+            
+            // --- NEW/MODIFIED: Re-add reticle setup ---
+            reticle = new THREE.Mesh(
+                new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
+                new THREE.MeshBasicMaterial()
+            );
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+            
+            shadowPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(100, 100),
+                new THREE.ShadowMaterial({ opacity: 0.5 })
+            );
+            shadowPlane.rotation.x = -Math.PI / 2;
+            shadowPlane.receiveShadow = true;
+            shadowPlane.visible = false; // Start hidden
+            scene.add(shadowPlane);
 
-    function setupUI() {
-        document.getElementById('sort-btn').addEventListener('click', toggleAutoSort);
-        document.getElementById('reset-btn').addEventListener('click', reset);
-        document.getElementById('next-step-btn').addEventListener('click', nextStep);
-        document.getElementById('speed-slider').addEventListener('input', (e) => {
-            animationSpeedMs = 1050 - e.target.value;
-        });
-        document.getElementById('array-input').addEventListener('change', reset);
-        window.addEventListener('resize', onWindowResize);
-    }
+            // --- NEW/MODIFIED: Re-add controller tap listener ---
+            const controller = renderer.xr.getController(0);
+            controller.addEventListener('select', () => {
+                // Only register a tap if we haven't placed an anchor yet
+                if (!placementAnchor) {
+                    anchorRequestPending = true;
+                }
+            });
+            scene.add(controller);
+        }
+        
+        function createCubes(dataArray) {
+            if (cubesGroup) scene.remove(cubesGroup);
+            labels.forEach(label => label.element.remove());
+            labels = [];
 
-    function setupAR() {
-        const arButton = ARButton.createButton(renderer, {
-            requiredFeatures: ['hit-test'],
-            optionalFeatures: ['dom-overlay'],
-            domOverlay: { root: document.body }
-        });
-        arButton.id = 'ar-button';
-        arButton.textContent = 'Enter AR';
-        document.body.appendChild(arButton);
+            cubesGroup = new THREE.Group();
+            const cubeWidth = 0.8;
+            const spacing = 1.0;
+            const totalWidth = (dataArray.length - 1) * spacing;
+            const labelContainer = document.getElementById('label-container');
+            const maxValue = Math.max(...dataArray, 1);
 
-        // Session start: request hit-test
-        renderer.xr.addEventListener('sessionstart', async (ev) => {
-            const session = renderer.xr.getSession();
+            dataArray.forEach((value, index) => {
+                const scaledHeight = 0.5 + (value / maxValue) * 5; 
+                const geometry = new THREE.BoxGeometry(cubeWidth, scaledHeight, cubeWidth);
+                const material = new THREE.MeshStandardMaterial({ color: CUBE_COLOR });
+                const cube = new THREE.Mesh(geometry, material);
+                cube.castShadow = true;
+                
+                const xPos = index * spacing - totalWidth / 2;
+                cube.position.set(xPos, scaledHeight / 2, 0);
+                cube.userData = { value: value, sorted: false };
+                cubesGroup.add(cube);
 
-            // Hide desktop UI in AR
-            document.getElementById('ui-container').style.opacity = '0.9';
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'label';
+                labelDiv.textContent = value;
+                labelContainer.appendChild(labelDiv);
+                labels.push({ cube: cube, element: labelDiv });
+            });
+            
+            const ground = new THREE.Mesh(
+                new THREE.PlaneGeometry(100, 100),
+                new THREE.MeshStandardMaterial({color: 0x333333})
+            );
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            ground.position.y = -0.01;
+            cubesGroup.add(ground);
+            
+            // --- NEW/MODIFIED: Hide ground and group if in AR (until placed) ---
+            if (renderer.xr.isPresenting) {
+                ground.visible = false;
+                cubesGroup.visible = false; // Hide until placed
+            } else {
+                ground.visible = true;
+                cubesGroup.visible = true;
+            }
+            
+            scene.add(cubesGroup);
+            updateStatsPanel();
+        }
 
-            // Request hit-test source
-            if (session.requestHitTestSource && !hitTestSourceRequested) {
-                hitTestSourceRequested = true;
-                const viewerSpace = await session.requestReferenceSpace('viewer');
-                hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+        function* bubbleSortGenerator() {
+            // ... (Sorting logic - no changes) ...
+            const cubes = cubesGroup.children.filter(c => c.isMesh && c.geometry.type === 'BoxGeometry');
+            let n = cubes.length;
+            let swappedInPass;
+
+            for (let i = 0; i < n - 1; i++) {
+                swappedInPass = false;
+                for (let j = 0; j < n - i - 1; j++) {
+                    const cube1 = cubes[j];
+                    const cube2 = cubes[j + 1];
+
+                    cube1.material.color.set(HIGHLIGHT_COLOR);
+                    cube2.material.color.set(HIGHLIGHT_COLOR);
+                    stats.comparisons++;
+                    updateStatsPanel();
+                    yield;
+
+                    if (cube1.userData.value > cube2.userData.value) {
+                        isAnimating = true;
+                        stats.swaps++;
+                        yield swapCubes(cube1, cube2); 
+                        [cubes[j], cubes[j + 1]] = [cubes[j + 1], cubes[j]]; 
+                        swappedInPass = true;
+                    }
+                    
+                    if (!cube1.userData.sorted) cube1.material.color.set(CUBE_COLOR);
+                    if (!cube2.userData.sorted) cube2.material.color.set(CUBE_COLOR);
+                }
+                const sortedCube = cubes[n - 1 - i];
+                sortedCube.material.color.set(SORTED_COLOR);
+                sortedCube.userData.sorted = true;
+                
+                if (!swappedInPass) break;
+            }
+            
+            cubes.forEach(c => {
+                c.material.color.set(SORTED_COLOR);
+                c.userData.sorted = true;
+            });
+            
+            isSorting = false;
+            isAutoSorting = false;
+            sortGenerator = null;
+        }
+
+        function swapCubes(cube1, cube2) {
+            // ... (Swap animation - no changes) ...
+            return new Promise(resolve => {
+                const pos1_x = cube1.position.x;
+                const pos2_x = cube2.position.x;
+                const duration = animationSpeedMs * 0.8; 
+                let startTime = null;
+                
+                function animateSwap(time) {
+                    if (!startTime) startTime = time;
+                    const progress = Math.min((time - startTime) / duration, 1);
+                    
+                    cube1.position.x = pos1_x + (pos2_x - pos1_x) * progress;
+                    cube2.position.x = pos2_x + (pos1_x - pos2_x) * progress;
+
+                    if (progress < 1) {
+                        requestAnimationFrame(animateSwap);
+                    } else {
+                        cube1.position.x = pos2_x;
+                        cube2.position.x = pos1_x;
+                        updateStatsPanel();
+                        isAnimating = false; 
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(animateSwap);
+            });
+        }
+        
+        function updateLabels() {
+            // ... (Label logic - no changes) ...
+            if (!cubesGroup || !cubesGroup.visible) {
+                labels.forEach(l => l.element.style.opacity = '0');
+                return;
+            }
+            labels.forEach(label => {
+                const { cube, element } = label;
+                const vector = new THREE.Vector3();
+                const cubeHeight = cube.geometry.parameters.height;
+                cube.getWorldPosition(vector);
+                vector.y += (cubeHeight * cube.scale.y) / 2 + 0.3; 
+                vector.project(camera);
+
+                const x = (vector.x * .5 + .5) * renderer.domElement.clientWidth;
+                const y = (vector.y * -.5 + .5) * renderer.domElement.clientHeight;
+
+                element.style.transform = `translate(-50%, -50%) translate(${x}px,${y}px)`;
+                element.style.opacity = vector.z < 1 ? '1' : '0';
+            });
+        }
+        
+        function updateStatsPanel() {
+            // ... (Stats logic - no changes) ...
+            document.getElementById('comparisons-stat').textContent = stats.comparisons;
+            document.getElementById('swaps-stat').textContent = stats.swaps;
+            if (!cubesGroup) return;
+            const currentArray = cubesGroup.children
+                .filter(c => c.isMesh && c.geometry.type === 'BoxGeometry')
+                .sort((a, b) => a.position.x - b.position.x)
+                .map(c => c.userData.value).join(', ');
+            document.getElementById('array-stat').textContent = `[${currentArray}]`;
+        }
+
+        function toggleAutoSort() {
+            // ... (Auto-sort logic - no changes) ...
+            if (isAnimating) return;
+
+            isAutoSorting = !isAutoSorting;
+            
+            if (isAutoSorting) {
+                if (!isSorting) {
+                    isSorting = true;
+                    sortGenerator = bubbleSortGenerator();
+                }
+                document.getElementById('sort-btn').textContent = 'Pause';
+                runAutoSortStep();
+            } else {
+                clearTimeout(autoSortTimeout);
+                document.getElementById('sort-btn').textContent = 'Start Sort';
+            }
+            updateUI();
+        }
+
+        function runAutoSortStep() {
+            // ... (Auto-sort logic - no changes) ...
+            if (!isAutoSorting || !sortGenerator) return;
+
+            if (isAnimating) {
+                autoSortTimeout = setTimeout(runAutoSortStep, 50);
+                return;
             }
 
-            // Tap to place
-            session.addEventListener('select', onSelect);
-        });
+            const result = sortGenerator.next();
 
-        // Session end: clean up
-        renderer.xr.addEventListener('sessionend', () => {
-            contentPlaced = false;
+            if (result.done) {
+                updateUI();
+                return;
+            }
+
+            if (result.value instanceof Promise) {
+                result.value.then(() => {
+                    autoSortTimeout = setTimeout(runAutoSortStep, animationSpeedMs);
+                });
+            } else {
+                autoSortTimeout = setTimeout(runAutoSortStep, animationSpeedMs);
+            }
+        }
+        
+        async function nextStep() {
+            // ... (Next-step logic - no changes) ...
+            if (isAnimating || isAutoSorting) return;
+
+            if (!isSorting) {
+                isSorting = true;
+                sortGenerator = bubbleSortGenerator();
+            }
+            
+            if (!sortGenerator) return;
+
+            isAnimating = true; 
+            updateUI();
+
+            let result = sortGenerator.next();
+            if (result.done) {
+                isAnimating = false;
+                updateUI();
+                return;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, Math.min(animationSpeedMs, 300)));
+            
+            result = sortGenerator.next();
+            if (result.done) {
+                isAnimating = false;
+                updateUI();
+                return;
+            }
+
+            if (result.value instanceof Promise) {
+                await result.value;
+            } else {
+                isAnimating = false;
+            }
+            
+            updateUI();
+        }
+        
+        function reset() {
+            if (autoSortTimeout) clearTimeout(autoSortTimeout);
+
+            isSorting = false;
+            isAutoSorting = false;
+            isAnimating = false;
+            sortGenerator = null;
+            stats = { comparisons: 0, swaps: 0 };
+            
+            // --- NEW/MODIFIED: Reset AR state ---
+            placementAnchor = null;
+            anchorRequestPending = false;
             hitTestSource = null;
             hitTestSourceRequested = false;
-            reticle.visible = false;
-            document.getElementById('ui-container').style.opacity = '1';
-            reset();
-        });
-    }
-
-    function onSelect(event) {
-        if (contentPlaced || !reticle.visible) return;
-
-        const frame = event.frame;
-        const referenceSpace = renderer.xr.getReferenceSpace();
-
-        // Create anchor at reticle pose
-        const hitPose = reticle.matrix;
-        frame.createAnchor(hitPose, referenceSpace).then(
-            (newAnchor) => {
-                anchor = newAnchor;
-                renderer.xr.getSession().addEventListener('anchorsupdated', updateAnchors);
-
-                // Place content
-                cubesGroup.position.setFromMatrixPosition(hitPose);
-                cubesGroup.quaternion.setFromRotationMatrix(hitPose);
-                cubesGroup.visible = true;
-
-                shadowPlane.position.copy(cubesGroup.position);
-                shadowPlane.position.y -= 0.01;
-                shadowPlane.visible = true;
-
-                contentPlaced = true;
-                reticle.visible = false;
-            },
-            (error) => {
-                console.warn("Anchor creation failed, falling back to fixed placement", error);
-                fallbackPlacement();
-            }
-        );
-    }
-
-    function updateAnchors(event) {
-        if (!anchor) return;
-        for (const updatedAnchor of event.added) {
-            if (updatedAnchor === anchor) {
-                const pose = updatedAnchor.anchorPose;
-                if (pose) {
-                    cubesGroup.matrix.copy(pose.matrix);
-                    cubesGroup.matrixAutoUpdate = false;
-                    shadowPlane.matrix.copy(pose.matrix);
-                    shadowPlane.position.y -= 0.01;
-                    shadowPlane.matrixAutoUpdate = false;
-                }
-            }
-        }
-    }
-
-    function fallbackPlacement() {
-        // Fallback: place 1.5m in front, face user
-        const position = new THREE.Vector3(0, 0, -1.5).applyMatrix4(camera.matrixWorld);
-        cubesGroup.position.copy(position);
-        cubesGroup.lookAt(camera.position.x, cubesGroup.position.y, camera.position.z);
-        cubesGroup.visible = true;
-
-        shadowPlane.position.copy(position);
-        shadowPlane.position.y -= 0.01;
-        shadowPlane.visible = true;
-
-        contentPlaced = true;
-        reticle.visible = false;
-    }
-
-    function createCubes(dataArray) {
-        if (cubesGroup) scene.remove(cubesGroup);
-        labels.forEach(l => l.element.remove());
-        labels = [];
-
-        cubesGroup = new THREE.Group();
-        const cubeWidth = 0.8;
-        const spacing = 1.0;
-        const totalWidth = (dataArray.length - 1) * spacing;
-        const labelContainer = document.getElementById('label-container');
-        const maxValue = Math.max(...dataArray, 1);
-
-        dataArray.forEach((value, i) => {
-            const height = 0.5 + (value / maxValue) * 5;
-            const geometry = new THREE.BoxGeometry(cubeWidth, height, cubeWidth);
-            const material = new THREE.MeshStandardMaterial({ color: CUBE_COLOR });
-            const cube = new THREE.Mesh(geometry, material);
-            cube.castShadow = true;
-            cube.position.set(i * spacing - totalWidth / 2, height / 2, 0);
-            cube.userData = { value, sorted: false };
-            cubesGroup.add(cube);
-
-            const label = document.createElement('div');
-            label.className = 'label';
-            label.textContent = value;
-            labelContainer.appendChild(label);
-            labels.push({ cube, element: label });
-        });
-
-        // Invisible ground for shadows (optional)
-        const ground = new THREE.Mesh(
-            new THREE.PlaneGeometry(100, 100),
-            new THREE.MeshStandardMaterial({ visible: false })
-        );
-        ground.rotation.x = -Math.PI / 2;
-        ground.position.y = -0.01;
-        cubesGroup.add(ground);
-
-        cubesGroup.visible = false; // Hidden until placed
-        scene.add(cubesGroup);
-        updateStatsPanel();
-    }
-
-    // === ALL SORTING FUNCTIONS UNCHANGED ===
-    function* bubbleSortGenerator() {
-        const cubes = cubesGroup.children.filter(c => c.isMesh && c.geometry.type === 'BoxGeometry');
-        let n = cubes.length;
-        let swapped;
-
-        for (let i = 0; i < n - 1; i++) {
-            swapped = false;
-            for (let j = 0; j < n - i - 1; j++) {
-                const a = cubes[j], b = cubes[j + 1];
-                a.material.color.set(HIGHLIGHT_COLOR);
-                b.material.color.set(HIGHLIGHT_COLOR);
-                stats.comparisons++;
-                updateStatsPanel();
-                yield;
-
-                if (a.userData.value > b.userData.value) {
-                    stats.swaps++;
-                    yield swapCubes(a, b);
-                    [cubes[j], cubes[j + 1]] = [cubes[j + 1], cubes[j]];
-                    swapped = true;
-                }
-                if (!a.userData.sorted) a.material.color.set(CUBE_COLOR);
-                if (!b.userData.sorted) b.material.color.set(CUBE_COLOR);
-            }
-            cubes[n - 1 - i].material.color.set(SORTED_COLOR);
-            cubes[n - 1 - i].userData.sorted = true;
-            if (!swapped) break;
-        }
-        cubes.forEach(c => {
-            c.material.color.set(SORTED_COLOR);
-            c.userData.sorted = true;
-        });
-        isSorting = isAutoSorting = false;
-        sortGenerator = null;
-    }
-
-    function swapCubes(a, b) {
-        return new Promise(resolve => {
-            const startX1 = a.position.x, startX2 = b.position.x;
-            const duration = animationSpeedMs * 0.8;
-            let start = null;
-
-            function step(time) {
-                if (!start) start = time;
-                const p = Math.min((time - start) / duration, 1);
-                a.position.x = startX1 + (startX2 - startX1) * p;
-                b.position.x = startX2 + (startX1 - startX2) * p;
-                if (p < 1) requestAnimationFrame(step);
-                else {
-                    a.position.x = startX2; b.position.x = startX1;
-                    updateStatsPanel();
-                    isAnimating = false;
-                    resolve();
-                }
-            }
-            requestAnimationFrame(step);
-        });
-    }
-
-    function updateLabels() {
-        if (!cubesGroup?.visible) {
-            labels.forEach(l => l.element.style.opacity = '0');
-            return;
-        }
-        labels.forEach(({ cube, element }) => {
-            const pos = new THREE.Vector3();
-            const height = cube.geometry.parameters.height;
-            cube.getWorldPosition(pos);
-            pos.y += height / 2 + 0.3;
-            pos.project(camera);
-
-            const x = (pos.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
-            const y = (pos.y * -0.5 + 0.5) * renderer.domElement.clientHeight;
-
-            element.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
-            element.style.opacity = pos.z < 1 ? '1' : '0';
-        });
-    }
-
-    function updateStatsPanel() {
-        document.getElementById('comparisons-stat').textContent = stats.comparisons;
-        document.getElementById('swaps-stat').textContent = stats.swaps;
-        if (!cubesGroup) return;
-        const arr = cubesGroup.children
-            .filter(c => c.isMesh && c.geometry.type === 'BoxGeometry')
-            .sort((a, b) => a.position.x - b.position.x)
-            .map(c => c.userData.value)
-            .join(', ');
-        document.getElementById('array-stat').textContent = `[${arr}]`;
-    }
-
-    function toggleAutoSort() {
-        if (isAnimating) return;
-        isAutoSorting = !isAutoSorting;
-        if (isAutoSorting) {
-            if (!isSorting) { isSorting = true; sortGenerator = bubbleSortGenerator(); }
-            document.getElementById('sort-btn').textContent = 'Pause';
-            runAutoSortStep();
-        } else {
-            clearTimeout(autoSortTimeout);
-            document.getElementById('sort-btn').textContent = 'Start Sort';
-        }
-        updateUI();
-    }
-
-    function runAutoSortStep() {
-        if (!isAutoSorting || !sortGenerator) return;
-        if (isAnimating) { autoSortTimeout = setTimeout(runAutoSortStep, 50); return; }
-
-        const { value, done } = sortGenerator.next();
-        if (done) { updateUI(); return; }
-
-        if (value instanceof Promise) {
-            value.then(() => autoSortTimeout = setTimeout(runAutoSortStep, animationSpeedMs));
-        } else {
-            autoSortTimeout = setTimeout(runAutoSortStep, animationSpeedMs);
-        }
-    }
-
-    async function nextStep() {
-        if (isAnimating || isAutoSorting) return;
-        if (!isSorting) { isSorting = true; sortGenerator = bubbleSortGenerator(); }
-        isAnimating = true; updateUI();
-
-        let { value, done } = sortGenerator.next();
-        if (done) { isAnimating = false; updateUI(); return; }
-
-        await new Promise(r => setTimeout(r, Math.min(animationSpeedMs, 300)));
-        ({ value, done } = sortGenerator.next());
-        if (value instanceof Promise) await value;
-        isAnimating = false;
-        updateUI();
-    }
-
-    function reset() {
-        clearTimeout(autoSortTimeout);
-        isSorting = isAutoSorting = isAnimating = false;
-        sortGenerator = null;
-        stats = { comparisons: 0, swaps: 0 };
-
-        const input = document.getElementById('array-input').value
-            .split(',').map(n => parseFloat(n.trim())).filter(n => !isNaN(n) && n > 0);
-
-        if (input.length === 0 || input.length > 20) {
-            document.getElementById('array-input').classList.add('invalid');
-            return;
-        }
-        document.getElementById('array-input').classList.remove('invalid');
-
-        createCubes(input);
-        contentPlaced = false;
-        reticle.visible = false;
-        if (cubesGroup) cubesGroup.visible = false;
-        if (shadowPlane) shadowPlane.visible = false;
-        updateUI();
-    }
-
-    function updateUI() {
-        const busy = isSorting || isAnimating;
-        document.getElementById('next-step-btn').disabled = isAnimating || isAutoSorting;
-        document.getElementById('reset-btn').disabled = busy;
-        document.getElementById('array-input').disabled = busy;
-        document.getElementById('sort-btn').disabled = busy && !isAutoSorting;
-        document.getElementById('sort-btn').textContent = isAutoSorting ? 'Pause' : 'Start Sort';
-    }
-
-    function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function animate(time, frame) {
-        if (!renderer.xr.isPresenting) controls.update();
-        updateLabels();
-
-        if (frame && !contentPlaced) {
-            // Show reticle during hit-test
-            if (hitTestSource && reticle) {
-                const referenceSpace = renderer.xr.getReferenceSpace();
-                const hitTestResults = frame.getHitTestResults(hitTestSource);
-                if (hitTestResults.length) {
-                    const hit = hitTestResults[0];
-                    const pose = hit.getPose(referenceSpace);
-                    reticle.visible = true;
-                    reticle.matrix.fromArray(pose.transform.matrix);
-                } else {
-                    reticle.visible = false;
-                }
+            
+            if (renderer.xr.isPresenting) {
+                if (shadowPlane) shadowPlane.visible = false;
+                if(cubesGroup) cubesGroup.visible = false;
+                if (reticle) reticle.visible = false;
+                
+                // Show AR UI again
+                arUIContainer.style.display = 'flex';
+                arPrompt.textContent = "Move your phone to find a surface...";
             } else {
-                // Fallback: show reticle 1.5m ahead
-                reticle.visible = true;
-                const pos = new THREE.Vector3(0, 0, -1.5).applyMatrix4(camera.matrixWorld);
-                const lookAt = new THREE.Vector3().copy(camera.position);
-                reticle.position.copy(pos);
-                reticle.lookAt(lookAt.x, pos.y, lookAt.z);
-                reticle.updateMatrix();
+                // Ensure AR UI is hidden if not in AR
+                arUIContainer.style.display = 'none';
+                if (shadowPlane) shadowPlane.visible = false;
+            }
+
+            const inputElement = document.getElementById('array-input');
+            const parsedData = inputElement.value.split(',')
+                .map(n => parseFloat(n.trim()))
+                .filter(n => !isNaN(n) && n > 0);
+            
+            inputElement.classList.remove('invalid');
+            if (parsedData.length === 0 || parsedData.length > 20) {
+                inputElement.classList.add('invalid');
+                if (parsedData.length > 20) {
+                     // Using a custom message box
+                    const msgBox = document.createElement('div');
+                    msgBox.textContent = "Please enter 20 elements or fewer for the best experience.";
+                    Object.assign(msgBox.style, {
+                        position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+                        background: '#e74c3c', color: 'white', padding: '10px 20px',
+                        borderRadius: '8px', zIndex: '200', boxShadow: '0 4px 15px rgba(0,0,0,0.3)'
+                    });
+                    document.body.appendChild(msgBox);
+                    setTimeout(() => msgBox.remove(), 3000);
+                }
+                return;
+            }
+            
+            createCubes(parsedData); // This will re-create cubes
+            
+            // --- MODIFIED: Ensure visibility is correct after reset ---
+            if (renderer.xr.isPresenting) {
+                if (cubesGroup) {
+                    cubesGroup.visible = false; // Stay hidden until placed
+                    const groundMesh = cubesGroup.children.find(c => c.geometry.type === 'PlaneGeometry');
+                    if (groundMesh) groundMesh.visible = false;
+                }
+                if (shadowPlane) shadowPlane.visible = false;
+            } else {
+                if (cubesGroup) cubesGroup.visible = true;
+                if (shadowPlane) shadowPlane.visible = false;
+            }
+            
+            updateUI();
+        }
+
+        function updateUI() {
+            // ... (Button disabling logic - no changes) ...
+            const isBusy = isSorting || isAnimating;
+            
+            document.getElementById('next-step-btn').disabled = isAnimating || isAutoSorting;
+            document.getElementById('reset-btn').disabled = isBusy;
+            document.getElementById('array-input').disabled = isBusy;
+            
+            if (isAutoSorting) {
+                document.getElementById('sort-btn').textContent = 'Pause';
+                document.getElementById('sort-btn').disabled = false;
+            } else {
+                document.getElementById('sort-btn').textContent = 'Start Sort';
+                document.getElementById('sort-btn').disabled = isBusy;
             }
         }
 
-        renderer.render(scene, camera);
-    }
-</script>
+        function onWindowResize() {
+            // ... (Resize logic - no changes) ...
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        /* --- NEW/MODIFIED: animate function for 'hit-test' and 'anchor' --- */
+        function animate(timestamp, frame) {
+            // Standard render loop items
+            if (!renderer.xr.isPresenting) controls.update();
+            updateLabels();
+
+            // AR-specific logic
+            if (frame) {
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const session = renderer.xr.getSession();
+
+                // 1. Session Management (Request hit-test, add 'end' listener)
+                if (hitTestSourceRequested === false) {
+                    session.requestReferenceSpace('viewer').then(space => {
+                        session.requestHitTestSource({ space: space }).then(source => {
+                            hitTestSource = source;
+                        });
+                    });
+                    session.addEventListener('end', () => {
+                        hitTestSourceRequested = false;
+                        hitTestSource = null;
+                        placementAnchor = null;
+                        
+                        // Hide AR UI on exit
+                        arUIContainer.style.display = 'none'; 
+                        
+                        // Reset camera and controls
+                        controls.reset();
+                        camera.position.set(0, 5, 12);
+                        controls.target.set(0, 1.5, 0);
+                        
+                        reset(); // Full reset of scene
+                    });
+                    hitTestSourceRequested = true;
+                }
+
+                // 2. Main AR Logic
+                let hitPose = null;
+                if (hitTestSource && !placementAnchor) {
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        hitPose = hit.getPose(referenceSpace);
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(hitPose.transform.matrix);
+                        arPrompt.textContent = "Tap to place.";
+                    } else {
+                        reticle.visible = false;
+                        arPrompt.textContent = "Move your phone to find a surface...";
+                    }
+                }
+
+                // 3. Handle Placement Tap
+                if (anchorRequestPending && hitPose) {
+                    anchorRequestPending = false;
+                    frame.createAnchor(hitPose.transform, referenceSpace).then(anchor => {
+                        placementAnchor = anchor;
+                        
+                        // Content is now placed, show it and hide UI
+                        cubesGroup.visible = true;
+                        shadowPlane.visible = true;
+                        arUIContainer.style.display = 'none';
+                        reticle.visible = false;
+                        
+                    }, (error) => {
+                        console.error("Could not create anchor: " + error);
+                    });
+                }
+
+                // 4. Update scene from anchor (if it exists)
+                if (placementAnchor) {
+                    const pose = frame.getPose(placementAnchor.anchorSpace, referenceSpace);
+                    if (pose) {
+                        // Update 3D model from the anchor's matrix
+                        cubesGroup.matrix.fromArray(pose.transform.matrix);
+                        cubesGroup.matrixAutoUpdate = false;
+
+                        // Update shadow to be at the anchor's base
+                        const anchorPosition = new THREE.Vector3().setFromMatrixPosition(pose.transform.matrix);
+                        shadowPlane.position.copy(anchorPosition);
+                        shadowPlane.position.y -= 0.01;
+                        shadowPlane.quaternion.set(0,0,0,1).rotateX(-Math.PI / 2);
+                        shadowPlane.matrixAutoUpdate = true;
+                    }
+                }
+            }
+            
+            renderer.render(scene, camera);
+        }
+    </script>
 </body>
 </html>
