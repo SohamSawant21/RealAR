@@ -199,59 +199,7 @@
             z-index: 101;
         }
         
-        /* --- NEW/MODIFIED: Container for AR UI --- */
-        #ar-ui-container {
-            position: absolute;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            z-index: 101;
-            pointer-events: none;
-            display: none; /* Hidden by default */
-            width: 100%;
-        }
-        
-        #ar-prompt {
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 10px;
-            font-size: 0.9em;
-            font-weight: 500;
-            text-align: center;
-            -webkit-backdrop-filter: blur(5px);
-            backdrop-filter: blur(5px);
-            border: 1px solid var(--border-color);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            max-width: 80%;
-        }
-
-        /* --- NEW/MODIFIED: Style for the fallback button --- */
-        #ar-fallback-btn {
-            pointer-events: auto; /* Make it clickable */
-            background-color: rgba(40, 40, 40, 0.8);
-            color: var(--text-color);
-            border: 1px solid var(--border-color);
-            padding: 10px 18px;
-            font-size: 0.9em;
-            font-weight: 500;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 15px;
-            -webkit-backdrop-filter: blur(5px);
-            backdrop-filter: blur(5px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
-        
-        #ar-fallback-btn:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-            color: #fff;
-        }
-
+        /* --- REMOVED: AR UI Container styles are no longer needed --- */
 
         /* 2D Labels */
         .label {
@@ -306,10 +254,7 @@
                 right: 15px;
             }
             
-            #ar-ui-container {
-                bottom: 70px;
-                width: calc(100% - 40px);
-            }
+            /* --- REMOVED: AR UI Container responsive styles --- */
         }
     </style>
 
@@ -349,11 +294,7 @@
     <!-- Container for 2D labels that overlay the 3D scene -->
     <div id="label-container"></div>
     
-    <!-- --- NEW/MODIFIED: AR UI Container --- -->
-    <div id="ar-ui-container">
-        <div id="ar-prompt">Move your phone to find a surface...</div>
-        <button id="ar-fallback-btn">View in front of me</button>
-    </div>
+    <!-- --- REMOVED: AR UI Container HTML is no longer needed --- -->
 
     <script type="module">
         import * as THREE from 'three';
@@ -375,16 +316,8 @@
         let autoSortTimeout = null;
         
         // --- AR-SPECIFIC STATE ---
-        let reticle, hitTestSource = null, hitTestSourceRequested = false;
+        // --- REMOVED: All AR state variables are gone except shadowPlane ---
         let shadowPlane;
-        let placementAnchor = null; 
-        let anchorRequestPending = false;
-        /* --- NEW/MODIFIED: State for AR placement logic --- */
-        let arPlacementState = 'seeking'; // 'seeking', 'placed', 'transient'
-        
-        // --- AR UI Elements ---
-        let arUIContainer, arPrompt, arFallbackBtn;
-
 
         // --- INITIALIZATION ---
         init();
@@ -440,37 +373,29 @@
             document.getElementById('array-input').addEventListener('change', reset);
             window.addEventListener('resize', onWindowResize, false);
             
-            /* --- NEW/MODIFIED: Get AR UI elements --- */
-            arUIContainer = document.getElementById('ar-ui-container');
-            arPrompt = document.getElementById('ar-prompt');
-            arFallbackBtn = document.getElementById('ar-fallback-btn');
+            // --- REMOVED: AR UI element query selectors ---
         }
 
         function setupAR() {
-            const arButton = ARButton.createButton(renderer, { 
-                requiredFeatures: ['hit-test'],
-                optionalFeatures: ['anchors'] 
+            // --- MODIFIED: Simplified AR button creation. No features needed. ---
+            const arButton = ARButton.createButton(renderer, {
+                // No features like 'hit-test' or 'anchors' are requested
             });
             arButton.id = 'ar-button';
             document.body.appendChild(arButton);
             
-            /* --- NEW/MODIFIED: Show AR UI on session start --- */
+            /* --- NEW/MODIFIED: Show content immediately on AR start --- */
             arButton.addEventListener('click', () => {
                 setTimeout(() => {
                     if (renderer.xr.isPresenting) {
-                        arUIContainer.style.display = 'flex';
-                        arPrompt.textContent = "Move your phone to find a surface...";
+                        // Make cubes and shadow visible right away
+                        if (cubesGroup) cubesGroup.visible = true;
+                        if (shadowPlane) shadowPlane.visible = true;
                     }
-                }, 500);
+                }, 500); // Short delay to ensure session is active
             });
             
-            reticle = new THREE.Mesh(
-                new THREE.RingGeometry(0.05, 0.07, 32).rotateX(-Math.PI / 2),
-                new THREE.MeshBasicMaterial()
-            );
-            reticle.matrixAutoUpdate = false;
-            reticle.visible = false;
-            scene.add(reticle);
+            // --- REMOVED: Reticle setup ---
             
             shadowPlane = new THREE.Mesh(
                 new THREE.PlaneGeometry(100, 100),
@@ -478,32 +403,10 @@
             );
             shadowPlane.rotation.x = -Math.PI / 2;
             shadowPlane.receiveShadow = true;
-            shadowPlane.visible = false;
+            shadowPlane.visible = false; // Start hidden
             scene.add(shadowPlane);
 
-            /* --- NEW/MODIFIED: Controller tap logic --- */
-            const controller = renderer.xr.getController(0);
-            controller.addEventListener('select', () => {
-                // Only register a tap if we are in the 'seeking' state
-                if (arPlacementState === 'seeking') {
-                    anchorRequestPending = true;
-                }
-            });
-            scene.add(controller);
-            
-            /* --- NEW/MODIFIED: Fallback button logic --- */
-            arFallbackBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent AR tap
-                arPlacementState = 'transient';
-                
-                // Hide all AR placement UI
-                arUIContainer.style.display = 'none';
-                reticle.visible = false;
-                
-                // Show the 3D model
-                cubesGroup.visible = true;
-                shadowPlane.visible = true;
-            });
+            // --- REMOVED: Controller setup and fallback button logic ---
         }
         
         function createCubes(dataArray) {
@@ -537,15 +440,21 @@
                 labels.push({ cube: cube, element: labelDiv });
             });
             
-            if (!renderer.xr.isPresenting) {
-                 const ground = new THREE.Mesh(
-                    new THREE.PlaneGeometry(100, 100),
-                    new THREE.MeshStandardMaterial({color: 0x333333})
-                );
-                ground.rotation.x = -Math.PI / 2;
-                ground.receiveShadow = true;
-                ground.position.y = -0.01;
-                cubesGroup.add(ground);
+            // --- MODIFIED: Always add ground, but hide it if in AR ---
+            const ground = new THREE.Mesh(
+                new THREE.PlaneGeometry(100, 100),
+                new THREE.MeshStandardMaterial({color: 0x333333})
+            );
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            ground.position.y = -0.01;
+            cubesGroup.add(ground);
+            
+            if (renderer.xr.isPresenting) {
+                ground.visible = false; // Hide ground plane in AR
+                cubesGroup.visible = true; // Eagerly show cubes
+            } else {
+                cubesGroup.visible = true; // Show for non-AR
             }
             
             scene.add(cubesGroup);
@@ -754,21 +663,14 @@
             sortGenerator = null;
             stats = { comparisons: 0, swaps: 0 };
             
-            /* --- NEW/MODIFIED: Reset AR state --- */
-            placementAnchor = null; 
-            arPlacementState = 'seeking';
-            anchorRequestPending = false;
+            // --- REMOVED: AR state reset ---
             
             if (renderer.xr.isPresenting) {
-                if (shadowPlane) shadowPlane.visible = false;
-                if(cubesGroup) cubesGroup.visible = false;
-                
-                // Show AR UI again
-                arUIContainer.style.display = 'flex';
-                arPrompt.textContent = "Move your phone to find a surface...";
+                if (shadowPlane) shadowPlane.visible = true;
+                if(cubesGroup) cubesGroup.visible = true;
             } else {
-                // Ensure AR UI is hidden if not in AR
-                arUIContainer.style.display = 'none';
+                // Ensure shadow plane is hidden if not in AR
+                if (shadowPlane) shadowPlane.visible = false;
             }
 
             const inputElement = document.getElementById('array-input');
@@ -794,7 +696,22 @@
                 return;
             }
             
-            createCubes(parsedData);
+            createCubes(parsedData); // This will re-create cubes
+            
+            // --- MODIFIED: Ensure visibility is correct after reset ---
+            if (renderer.xr.isPresenting) {
+                if (cubesGroup) {
+                    cubesGroup.visible = true;
+                    // Hide the 'ground' mesh which is part of the group
+                    const groundMesh = cubesGroup.children.find(c => c.geometry.type === 'PlaneGeometry');
+                    if (groundMesh) groundMesh.visible = false;
+                }
+                if (shadowPlane) shadowPlane.visible = true;
+            } else {
+                if (cubesGroup) cubesGroup.visible = true;
+                if (shadowPlane) shadowPlane.visible = false;
+            }
+            
             updateUI();
         }
 
@@ -822,7 +739,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        /* --- NEW/MODIFIED: This entire function is rewritten --- */
+        /* --- NEW/MODIFIED: Highly simplified animate function --- */
         function animate(timestamp, frame) {
             // Standard render loop items
             if (!renderer.xr.isPresenting) controls.update();
@@ -830,23 +747,34 @@
 
             // AR-specific logic
             if (frame) {
-                const referenceSpace = renderer.xr.getReferenceSpace();
-                const session = renderer.xr.getSession();
-
-                // 1. Session Management (Request hit-test, add 'end' listener)
-                if (hitTestSourceRequested === false) {
-                    session.requestReferenceSpace('viewer').then(space => {
-                        session.requestHitTestSource({ space: space }).then(source => {
-                            hitTestSource = source;
-                        });
-                    });
-                    session.addEventListener('end', () => {
-                        hitTestSourceRequested = false;
-                        hitTestSource = null;
-                        
-                        // Hide AR UI on exit
-                        arUIContainer.style.display = 'none'; 
-                        
+                // --- REMOVED: All state, hit-test, and anchor logic ---
+                
+                // This is now the ONLY logic that runs in AR.
+                // It places the content 2 meters in front of the camera, every frame.
+                
+                // Calculate position 2m in front of camera
+                const position = new THREE.Vector3(0, 0, -2.0).applyMatrix4(camera.matrixWorld);
+                
+                if (cubesGroup) {
+                    cubesGroup.position.copy(position);
+                    
+                    // Make it face the user
+                    const lookAtPos = new THREE.Vector3(camera.position.x, cubesGroup.position.y, camera.position.z);
+                    cubesGroup.lookAt(lookAtPos);
+                    cubesGroup.matrixAutoUpdate = true;
+                }
+                
+                if (shadowPlane) {
+                    shadowPlane.position.copy(position);
+                    shadowPlane.position.y -= 0.01; // Just below
+                    shadowPlane.quaternion.set(0,0,0,1).rotateX(-Math.PI / 2);
+                    shadowPlane.matrixAutoUpdate = true;
+                }
+                
+                // --- NEW: Add session end listener here (simplified) ---
+                if (!renderer.xr.getSession()._sessionEndListener) {
+                    renderer.xr.getSession()._sessionEndListener = true; // Flag to prevent multiple listeners
+                    renderer.xr.getSession().addEventListener('end', () => {
                         // Reset camera and controls
                         controls.reset();
                         camera.position.set(0, 5, 12);
@@ -854,88 +782,6 @@
                         
                         reset(); // Full reset of scene
                     });
-                    hitTestSourceRequested = true;
-                }
-
-                // 2. State-based AR rendering
-                switch (arPlacementState) {
-                    
-                    // STATE 1: Looking for a surface
-                    case 'seeking': {
-                        let hitPose = null;
-                        if (hitTestSource) {
-                            const hitTestResults = frame.getHitTestResults(hitTestSource);
-                            if (hitTestResults.length > 0) {
-                                const hit = hitTestResults[0];
-                                hitPose = hit.getPose(referenceSpace);
-                                reticle.visible = true;
-                                reticle.matrix.fromArray(hitPose.transform.matrix);
-                                arPrompt.textContent = "Tap to place.";
-                            } else {
-                                reticle.visible = false;
-                                arPrompt.textContent = "Move your phone to find a surface...";
-                            }
-                        }
-
-                        // Check if user tapped a valid spot
-                        if (anchorRequestPending && hitPose) {
-                            anchorRequestPending = false;
-                            frame.createAnchor(hitPose.transform, referenceSpace).then(anchor => {
-                                placementAnchor = anchor;
-                                cubesGroup.visible = true;
-                                shadowPlane.visible = true;
-                                reticle.visible = false;
-                                arUIContainer.style.display = 'none'; // Hide UI
-                                
-                                // Transition to 'placed' state
-                                arPlacementState = 'placed'; 
-                            }, (error) => {
-                                console.error("Could not create anchor: " + error);
-                            });
-                        }
-                        break;
-                    }
-
-                    // STATE 2: Object is anchored and stable
-                    case 'placed': {
-                        if (placementAnchor) {
-                            const pose = frame.getPose(placementAnchor.anchorSpace, referenceSpace);
-                            if (pose) {
-                                // Update 3D model from the anchor's matrix
-                                cubesGroup.matrix.fromArray(pose.transform.matrix);
-                                cubesGroup.matrixAutoUpdate = false;
-
-                                // Update shadow to be at the anchor's base
-                                const anchorPosition = new THREE.Vector3().setFromMatrixPosition(pose.transform.matrix);
-                                shadowPlane.position.copy(anchorPosition);
-                                shadowPlane.position.y -= 0.01;
-                                shadowPlane.quaternion.set(0,0,0,1).rotateX(-Math.PI / 2);
-                                shadowPlane.matrixAutoUpdate = true;
-                            }
-                        }
-                        break;
-                    }
-                        
-                    // STATE 3: Fallback "viewer" mode
-                    case 'transient': {
-                        // Calculate position 2m in front of camera
-                        const position = new THREE.Vector3(0, 0, -2.0).applyMatrix4(camera.matrixWorld);
-                        
-                        // Update object and shadow positions EVERY FRAME
-                        cubesGroup.position.copy(position);
-                        
-                        // Make it face the user
-                        const lookAtPos = new THREE.Vector3(camera.position.x, cubesGroup.position.y, camera.position.z);
-                        cubesGroup.lookAt(lookAtPos);
-                        
-                        shadowPlane.position.copy(cubesGroup.position);
-                        shadowPlane.position.y -= 0.01; // Just below
-                        shadowPlane.quaternion.set(0,0,0,1).rotateX(-Math.PI / 2);
-                        
-                        cubesGroup.matrixAutoUpdate = true;
-                        shadowPlane.matrixAutoUpdate = true;
-                        break;
-                    }
                 }
             }
             
