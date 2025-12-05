@@ -1,151 +1,102 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AR Bubble Sort Visualizer</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <title>Bubble Sort AR</title>
 
-  <style>
-    body { margin: 0; overflow: hidden; font-family: sans-serif; }
-  </style>
-</head>
+    <!-- A-Frame -->
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
 
-<body>
-  <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
-    
-    <a-marker preset="hiro">
-      <a-entity id="bars-root" position="0 0 0"></a-entity>
-    </a-marker>
+    <!-- AR.js -->
+    <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/three.js/build/ar.js"></script>
 
-    <a-entity camera></a-entity>
-  </a-scene>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+    </style>
+  </head>
 
-  <script>
-    const values = [42, 18, 67, 33, 55];
+  <body>
+    <a-scene embedded arjs="sourceType: webcam;">
+      <!-- Hiro marker -->
+      <a-marker preset="hiro" id="marker">
 
-    document.querySelector('a-scene').addEventListener('loaded', () => {
-      // Small delay to ensure AR system is ready
-      setTimeout(() => {
-          createBars();
-          bubbleSortAnimate(values);
-      }, 1000);
-    });
+        <!-- Bars group -->
+        <a-entity id="bars" position="0 0 0" scale="0.4 0.4 0.4">
 
-    function createBars() {
-      const root = document.getElementById('bars-root');
-      const spacing = 0.6;
+          <a-box id="b0" position="-2 0 0" depth="0.5" width="0.5" height="1" color="#4CC3D9"></a-box>
+          <a-box id="b1" position="-1 0 0" depth="0.5" width="0.5" height="2" color="#4CC3D9"></a-box>
+          <a-box id="b2" position="0 0 0" depth="0.5" width="0.5" height="0.8" color="#4CC3D9"></a-box>
+          <a-box id="b3" position="1 0 0" depth="0.5" width="0.5" height="1.5" color="#4CC3D9"></a-box>
+          <a-box id="b4" position="2 0 0" depth="0.5" width="0.5" height="1.2" color="#4CC3D9"></a-box>
 
-      values.forEach((v, i) => {
-        const height = v / 50;
-        const x = (i - 2) * spacing;
+        </a-entity>
 
-        const bar = document.createElement('a-box');
-        // Set ID strictly
-        bar.id = "bar-" + i;
-        
-        bar.setAttribute('position', `${x} ${height/2} 0`);
-        bar.setAttribute('width', '0.4');
-        bar.setAttribute('depth', '0.3');
-        bar.setAttribute('height', height);
-        bar.setAttribute('color', '#4CC3D9');
+      </a-marker>
 
-        // Label
-        const label = document.createElement('a-text');
-        label.setAttribute('value', v);
-        label.setAttribute('align', 'center');
-        // Adjusted Y slightly to ensure it sits on top
-        label.setAttribute('position', `0 ${height/2 + 0.25} 0`);
-        label.setAttribute('scale', '2 2 2'); // Scale relative to parent box
-        // To prevent text from stretching with the box, we un-parent it or use a trick
-        // Ideally, adding it as a child of a scaled box scales the text. 
-        // Better approach: wrap the label in an entity with inverse scale, 
-        // but for simplicity, we will just keep it as is.
-        
-        bar.appendChild(label);
-        root.appendChild(bar);
-      });
-    }
+      <a-entity camera></a-entity>
+    </a-scene>
 
-    async function bubbleSortAnimate(arr) {
-      const n = arr.length;
-      for (let pass = 0; pass < n - 1; pass++) {
-        for (let j = 0; j < n - pass - 1; j++) {
-          
-          await highlightBars(j, j + 1, "#FFC65D");
+    <script>
+      const bars = [
+        document.querySelector('#b0'),
+        document.querySelector('#b1'),
+        document.querySelector('#b2'),
+        document.querySelector('#b3'),
+        document.querySelector('#b4')
+      ];
 
-          if (arr[j] > arr[j + 1]) {
-            await swapBars(j, j + 1);
-            
-            // Swap in memory array
-            const tmp = arr[j];
-            arr[j] = arr[j + 1];
-            arr[j + 1] = tmp;
+      let arr = [1, 2, 0.8, 1.5, 1.2];
+
+      async function bubbleSort() {
+        for (let i = 0; i < arr.length - 1; i++) {
+          for (let j = 0; j < arr.length - i - 1; j++) {
+            bars[j].setAttribute("color", "#FF4444");
+            bars[j + 1].setAttribute("color", "#FF4444");
+
+            await wait(700);
+
+            if (arr[j] > arr[j + 1]) {
+              await swapBars(j, j + 1);
+            }
+
+            bars[j].setAttribute("color", "#4CC3D9");
+            bars[j + 1].setAttribute("color", "#4CC3D9");
           }
-          
-          // Revert color
-          await highlightBars(j, j + 1, "#4CC3D9", 100);
         }
       }
-    }
 
-    function highlightBars(a, b, color, duration = 500) {
-      return new Promise(res => {
-        const barA = document.getElementById("bar-" + a);
-        const barB = document.getElementById("bar-" + b);
+      function wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      }
 
-        if(barA) barA.setAttribute("color", color);
-        if(barB) barB.setAttribute("color", color);
+      async function swapBars(i, j) {
+        let barA = bars[i];
+        let barB = bars[j];
 
-        setTimeout(() => {
-          res();
-        }, duration);
+        let posA = barA.getAttribute("position");
+        let posB = barB.getAttribute("position");
+
+        barA.setAttribute("position", posB);
+        barB.setAttribute("position", posA);
+
+        let temp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = temp;
+
+        bars[i] = barB;
+        bars[j] = barA;
+
+        await wait(500);
+      }
+
+      document.querySelector("#marker").addEventListener("markerFound", () => {
+        bubbleSort();
       });
-    }
-
-    function swapBars(a, b) {
-      return new Promise(res => {
-        const barA = document.getElementById("bar-" + a);
-        const barB = document.getElementById("bar-" + b);
-
-        // 1. Get current DOM positions
-        const posA = barA.getAttribute("position");
-        const posB = barB.getAttribute("position");
-
-        // 2. Clone the X values specifically (Crucial!)
-        const targetA_X = posB.x;
-        const targetB_X = posA.x;
-
-        // 3. Clean up old animations to prevent conflicts
-        barA.removeAttribute('animation__move');
-        barB.removeAttribute('animation__move');
-
-        // 4. Set Animations using specific X coordinates
-        // We keep Y and Z the same as they were
-        barA.setAttribute("animation__move", 
-          `property: position; to: ${targetA_X} ${posA.y} ${posA.z}; dur: 600; easing: easeInOutQuad`);
-          
-        barB.setAttribute("animation__move", 
-          `property: position; to: ${targetB_X} ${posB.y} ${posB.z}; dur: 600; easing: easeInOutQuad`);
-
-        setTimeout(() => {
-          // 5. CRITICAL FIX: Update the actual DOM position attribute
-          // The animation moves the visual, but we must update the data
-          // so the next loop's getAttribute('position') is correct.
-          barA.setAttribute('position', {x: targetA_X, y: posA.y, z: posA.z});
-          barB.setAttribute('position', {x: targetB_X, y: posB.y, z: posB.z});
-
-          // 6. Swap IDs so logical index matches DOM ID
-          barA.id = "temp";
-          barB.id = "bar-" + a;
-          barA.id = "bar-" + b;
-          
-          res();
-        }, 650);
-      });
-    }
-  </script>
-</body>
+    </script>
+  </body>
 </html>
